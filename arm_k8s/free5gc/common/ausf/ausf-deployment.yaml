@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: free5gc-ausf
+  labels:
+    app: free5gc
+    nf: ausf
+spec:
+  selector:
+    matchLabels:
+      app: free5gc
+      nf: ausf
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: free5gc
+        nf: ausf
+    spec:
+      initContainers:
+      - name: wait-amf
+        image: arm-curl:curl
+        imagePullPolicy: Never
+        env:
+        - name: DEPENDENCIES
+          value: amf-namf:8000
+        command: ["sh", "-c", "until curl -s -o /dev/null http://$DEPENDENCIES; do echo waiting; sleep 2; done;"]
+      containers:
+      - image: arm-curl:ausf
+        imagePullPolicy: Never
+        name: ausf
+        ports:
+        - containerPort: 8000
+        command: ["/app/ausf"]
+        args: ["--config", "/app/config/ausfcfg.yaml"]  
+        env:
+          - name: GIN_MODE
+            value: release
+        volumeMounts:
+        - mountPath: /app/config/
+          name: ausf-volume
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - name: ausf-volume
+        projected:
+          sources:
+          - configMap:
+              name: ausf-configmap

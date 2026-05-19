@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: amf-configmap
+  labels:
+    app: free5gc
+data:
+  amfcfg.yaml: |
+    info:
+      version: 1.0.9
+      description: AMF initial local configuration
+
+    configuration:
+      amfName: AMF
+      ngapIpList:
+        - 10.0.2.107
+      ngapPort: 38412
+      sbi:
+        scheme: http
+        registerIPv4: amf-namf
+        bindingIPv4: 0.0.0.0
+        port: 8000
+      serviceNameList:
+        - namf-comm
+        - namf-evts
+        - namf-mt
+        - namf-loc
+        - namf-oam
+      servedGuamiList:
+        - plmnId:
+            mcc: 001
+            mnc: 01
+          amfId: cafe00
+      supportTaiList:
+        - plmnId:
+            mcc: 001
+            mnc: 01
+          tac: 000001
+      plmnSupportList:
+        - plmnId:
+            mcc: 001
+            mnc: 01
+          snssaiList:
+            - sst: 1
+              sd: 000001
+            - sst: 1
+              sd: 000002
+      supportDnnList:
+        - internet
+        - streaming
+      nrfUri: http://nrf-nnrf:8000
+      security:
+        integrityOrder:
+          - NIA2
+        cipheringOrder:
+          - NEA0
+      networkName:
+        full: free5GC
+        short: free
+      locality: area1
+      t3502Value: 720
+      t3512Value: 3600
+      non3gppDeregTimerValue: 3240
+      t3513:
+        enable: true
+        expireTime: 6s
+        maxRetryTimes: 4
+      t3522:
+        enable: true
+        expireTime: 6s
+        maxRetryTimes: 4
+      t3550:
+        enable: true
+        expireTime: 6s
+        maxRetryTimes: 4
+      t3555:
+        enable: true
+        expireTime: 6s
+        maxRetryTimes: 4
+      t3560:
+        enable: true
+        expireTime: 6s
+        maxRetryTimes: 4
+      t3565:
+        enable: true
+        expireTime: 6s
+        maxRetryTimes: 4
+      t3570:
+        enable: true
+        expireTime: 6s
+        maxRetryTimes: 4
+
+    logger:
+      enable: true
+      level: info
+      reportCaller: false

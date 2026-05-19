@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smf-configmap
+  labels:
+    app: free5gc
+    nf: smf
+    name: smf
+data:
+  smfcfg.yaml: |
+    info:
+      version: 1.0.7
+      description: SMF initial local configuration
+
+    configuration:
+      smfName: SMF
+      sbi:
+        scheme: http
+        registerIPv4: smf-nsmf
+        bindingIPv4: 0.0.0.0
+        port: 8000
+      serviceNameList:
+        - nsmf-pdusession
+        - nsmf-event-exposure
+        - nsmf-oam
+      snssaiInfos:
+        - sNssai:
+            sst: 1
+            sd: 000001
+          dnnInfos:
+            - dnn: internet
+              dns:
+                ipv4: 8.8.8.8
+      plmnList:
+        - mcc: "001"
+          mnc: "01"
+      locality: area1
+      pfcp:
+        listenAddr: 10.10.4.101
+        externalAddr: 10.10.4.101
+        nodeID: 10.10.4.101
+        heartbeatInterval: 10s
+      userplaneInformation:
+        upNodes:
+          gNB:
+            type: AN
+          UPF1:
+            type: UPF
+            nodeID: 10.10.4.1
+            addr: 10.10.4.1
+            sNssaiUpfInfos:
+              - sNssai:
+                  sst: 1
+                  sd: 000001
+                dnnUpfInfoList:
+                  - dnn: internet
+                    pools:
+                      - cidr: 10.1.0.0/16
+            interfaces:
+              - interfaceType: N3
+                endpoints:
+                  - 10.10.3.1
+                networkInstances:
+                  - internet
+        links:
+          - A: gNB
+            B: UPF1
+      nrfUri: http://nrf-nnrf:8000
+      t3591:
+        enable: true
+        expireTime: 16s
+        maxRetryTimes: 3
+      t3592:
+        enable: true
+        expireTime: 16s
+        maxRetryTimes: 3
+
+    logger:
+      enable: true
+      level: info
+      reportCaller: false
+
+  uerouting.yaml: |
+    info:
+      version: 1.0.7
+      description: Routing information for UE
+    ueRoutingInfo: # the list of UE routing information
+      UE1: # Group Name
+        members:
+        - imsi-0010100000001 # Subscription Permanent Identifier of the UE
+        topology: # Network topology for this group (Uplink: A->B, Downlink: B->A)
+        # default path derived from this topology
+        # node name should be consistent with smfcfg.yaml
+          - A: gNB
+            B: UPF1
+        specificPath:
+          - dest: 10.60.0.103/32 # the destination IP address on Data Network (DN)
+            # the order of UPF nodes in this path. We use the UPF's name to represent each UPF node.
+            # The UPF's name should be consistent with smfcfg.yaml
+            path: [BranchingUPF, AnchorUPF2]

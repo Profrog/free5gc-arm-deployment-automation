@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: free5gc-udm
+  labels:
+    app: free5gc
+    nf: udm
+spec:
+  selector:
+    matchLabels:
+      app: free5gc
+      nf: udm
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: free5gc
+        nf: udm
+    spec:
+      initContainers:
+      - name: wait-pcf
+        image: arm-curl:curl
+        imagePullPolicy: Never
+        env:
+        - name: DEPENDENCIES
+          value: pcf-npcf:8000
+        command: ["sh", "-c", "until curl -s -o /dev/null http://$DEPENDENCIES; do echo waiting; sleep 2; done;"]
+      containers:
+      - image: arm-curl:udm
+        imagePullPolicy: Never
+        name: udm
+        ports:
+        - containerPort: 8000
+        command: ["/app/udm"]
+        args: ["--config", "/app/config/udmcfg.yaml"]   
+        env:
+          - name: GIN_MODE
+            value: release
+        volumeMounts:
+        - mountPath: /app/config/
+          name: udm-volume
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - name: udm-volume
+        projected:
+          sources:
+          - configMap:
+              name: udm-configmap

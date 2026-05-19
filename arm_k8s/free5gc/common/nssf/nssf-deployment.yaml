@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: free5gc-nssf
+  labels:
+    app: free5gc
+    nf: nssf
+spec:
+  selector:
+    matchLabels:
+      app: free5gc
+      nf: nssf
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: free5gc
+        nf: nssf
+    spec:
+      initContainers:
+      - name: wait-udr
+        image: arm-curl:curl
+        imagePullPolicy: Never
+        env:
+        - name: DEPENDENCIES
+          value: udr-nudr:8000
+        command: ["sh", "-c", "until curl -s -o /dev/null http://$DEPENDENCIES; do echo waiting; sleep 2; done;"]
+      containers:
+      - image: arm-curl:nssf
+        imagePullPolicy: Never
+        name: nssf
+        ports:
+        - containerPort: 8000
+        command: ["/app/nssf"]
+        args: ["--config", "/app/config/nssfcfg.yaml"]
+        env:
+        - name: GIN_MODE
+          value: release
+        volumeMounts:
+        - mountPath: /app/config/
+          name: nssf-volume
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - name: nssf-volume
+        projected:
+          sources:
+          - configMap:
+              name: nssf-configmap

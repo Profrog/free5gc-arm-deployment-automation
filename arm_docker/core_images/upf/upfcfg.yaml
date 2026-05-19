@@ -1,0 +1,24 @@
+version: 1.0.3
+description: UPF ARM64 configuration
+
+pfcp:
+  addr: 10.10.4.1
+  nodeID: 10.10.4.1
+  retransTimeout: 1s
+  maxRetrans: 3
+
+gtpu:
+  forwarder: gtp5g
+  ifList:
+    - addr: 10.10.3.1
+      type: N3
+      ifname: upf1gtp
+
+dnnList:
+  - dnn: internet
+    cidr: 10.1.0.0/16
+
+logger:
+  enable: true
+  level: info
+  reportCaller: false

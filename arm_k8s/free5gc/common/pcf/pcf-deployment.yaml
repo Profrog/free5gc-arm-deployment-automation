@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: free5gc-pcf
+  labels:
+    app: free5gc
+    nf: pcf
+spec:
+  selector:
+    matchLabels:
+      app: free5gc
+      nf: pcf
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: free5gc
+        nf: pcf
+    spec:
+      initContainers:
+      - name: wait-smf
+        image: arm-curl:curl
+        imagePullPolicy: Never
+        env:
+        - name: DEPENDENCIES
+          value: smf-nsmf:8000
+        command: ["sh", "-c", "until curl -s -o /dev/null http://$DEPENDENCIES; do echo waiting; sleep 2; done;"]
+      containers:
+      - image: arm-curl:pcf
+        imagePullPolicy: Never
+        name: pcf
+        ports:
+        - containerPort: 8000
+        command: ["/app/pcf"]
+        args: ["--config", "/app/config/pcfcfg.yaml"]   
+        env:
+          - name: GIN_MODE
+            value: release
+        volumeMounts:
+        - mountPath: /app/config/
+          name: pcf-volume
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - name: pcf-volume
+        projected:
+          sources:
+          - configMap:
+              name: pcf-configmap

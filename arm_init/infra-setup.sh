@@ -139,6 +139,34 @@ install_go() {
     ok "Go $GO_VER installed"
 }
 
+# ────────────────────────────────────────────
+# gtp5g 커널 모듈
+# ────────────────────────────────────────────
+install_gtp5g() {
+    log "=== gtp5g kernel module ==="
+    if lsmod | grep -q gtp5g; then
+        ok "Already loaded"; return
+    fi
+
+    local SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    local PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+    local GTP5G_DIR="$PROJECT_DIR/free5gc_build/gtp5g"
+
+    if modinfo gtp5g &>/dev/null; then
+        sudo modprobe gtp5g
+    else
+        if [ ! -d "$GTP5G_DIR" ]; then
+            log "  Cloning gtp5g ..."
+            git clone https://github.com/free5gc/gtp5g.git "$GTP5G_DIR"
+        fi
+        cd "$GTP5G_DIR"
+        make
+        sudo make install
+        sudo modprobe gtp5g
+    fi
+    ok "gtp5g module loaded"
+}
+
 # ════════════════════════════════════════════
 # Main
 # ════════════════════════════════════════════
@@ -150,6 +178,7 @@ install_k8s
 create_cluster
 install_cni
 install_go
+install_gtp5g
 
 echo ""
-ok "Pre-setup complete. Run ./setup.sh to deploy free5gc."
+ok "Pre-setup complete. Run ./clone-source.sh → build.sh → docker-build.sh → deploy.sh"

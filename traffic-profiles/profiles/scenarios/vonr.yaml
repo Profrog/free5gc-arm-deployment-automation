@@ -1,0 +1,36 @@
+# vonr.yaml — Voice over NR 실시간 음성 시나리오
+#
+# 사용: ./run.sh --apn apn/internet.yaml --scenario scenarios/vonr.yaml
+
+---
+metadata:
+  name: "Voice over NR"
+  description: "VoNR 음성통화 시뮬레이션 (AMR-WB 23.85kbps, 20ms 프레임, 3분 통화)"
+  version: "1.0"
+
+# QoS override — GBR voice
+qos:
+  fiveqi: 1
+  priority: 2
+  gbr_uplink: "50Kbps"
+  gbr_downlink: "50Kbps"
+
+traffic_pattern:
+  protocol: "udp"
+  direction: "bidirectional"
+  packet_size: 80
+  rate: "50pps"
+  duration: "180s"
+  burst:
+    enabled: false
+  jitter: "2ms"
+
+ue:
+  count: 10
+  imsi_start: "001010000000200"
+  ramp_up: "1s"
+
+measurement:
+  metrics: [latency, jitter, packet_loss]
+  interval: "1s"
+  output: "results/vonr_result.json"

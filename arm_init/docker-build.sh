@@ -14,7 +14,7 @@ CORE_DIR="$DOCKER_DIR/core_images"
 RAN_DIR="$DOCKER_DIR/ran_images"
 BUILD_DIR="$PROJECT_DIR/free5gc_build"
 
-ALL_NFS="nrf amf ausf pcf udr udm nssf smf upf ueransim"
+ALL_NFS="nrf amf ausf pcf udr udm nssf smf upf ueransim nwdaf"
 
 log() { echo "[$(date '+%H:%M:%S')] $1"; }
 ok()  { echo "[OK] $1"; }
@@ -36,6 +36,9 @@ fi
 for nf in $BUILD_NFS; do
     if [ "$nf" = "ueransim" ]; then
         [ -f "$BUILD_DIR/ueransim/nr-gnb" ] || die "Binary not found: $BUILD_DIR/ueransim/nr-gnb\n  Run arm_init/build.sh first."
+    elif [ "$nf" = "nwdaf" ]; then
+        # NWDAF는 Python — 바이너리 빌드 불필요, Dockerfile만 있으면 됨
+        [ -f "$PROJECT_DIR/arm_k8s/nwdaf/Dockerfile" ] || die "NWDAF Dockerfile not found"
     else
         [ -f "$BUILD_DIR/$nf/$nf" ] || die "Binary not found: $BUILD_DIR/$nf/$nf\n  Run arm_init/build.sh first."
     fi
@@ -94,6 +97,16 @@ VOLUME ["/ueransim/config"]
 EOF
     log "  Building image arm-curl:ueransim ..."
     docker build --platform linux/arm64 -t arm-curl:ueransim "$RAN_DIR/ueransim" 2>&1 | tail -1
+}
+
+# ────────────────────────────────────────────
+# NWDAF 이미지 빌드 (Python + sklearn + kubectl)
+# ────────────────────────────────────────────
+build_nwdaf_image() {
+    local nwdaf_dir="$PROJECT_DIR/arm_k8s/nwdaf"
+    [ -f "$nwdaf_dir/Dockerfile" ] || die "NWDAF Dockerfile not found: $nwdaf_dir/Dockerfile"
+    log "  Building image arm-curl:nwdaf ..."
+    docker build --platform linux/arm64 -t arm-curl:nwdaf "$nwdaf_dir" 2>&1 | tail -1
 }
 
 # ────────────────────────────────────────────
@@ -160,6 +173,10 @@ for nf in $BUILD_NFS; do
         ueransim)
             build_ueransim_image
             IMPORT_TAGS="$IMPORT_TAGS ueransim"
+            ;;
+        nwdaf)
+            build_nwdaf_image
+            IMPORT_TAGS="$IMPORT_TAGS nwdaf"
             ;;
         *)
             build_core_image "$nf"

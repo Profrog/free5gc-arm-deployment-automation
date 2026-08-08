@@ -1,0 +1,30 @@
+# experiment-c-t2.yaml — NWDAF 동적 전환, 소규모 트래픽
+---
+metadata:
+  name: "C-T2: NWDAF Dynamic + Small Traffic"
+  matrix_id: "C-T2"
+
+nwdaf:
+  enabled: true
+  wait_ready: true
+
+cni:
+  initial: "macvlan"   # 일부러 macvlan → NWDAF가 ipvlan로 전환해야 함
+
+phases:
+  - name: "small_traffic"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 128
+      rate: "10Mbps"
+      duration: "120s"
+    expected_cni: "ipvlan"
+
+measurement:
+  monitor_interval: 5
+  repetitions: 5
+
+validation:
+  switch_expected: true
+  switch_direction: "macvlan → ipvlan"

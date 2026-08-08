@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:3.9.4-ubuntu22
+    container_name: gerrit
+    hostname: gerrit
+    ports:
+      - "8080:8080"    # Web UI
+      - "29418:29418"  # SSH (git push)
+    volumes:
+      - gerrit_git:/var/gerrit/git
+      - gerrit_index:/var/gerrit/index
+      - gerrit_cache:/var/gerrit/cache
+      - gerrit_db:/var/gerrit/db
+      - gerrit_etc:/var/gerrit/etc
+      - ./gerrit/etc/gerrit.config:/var/gerrit/etc/gerrit.config:ro
+    environment:
+      - CANONICAL_WEB_URL=http://localhost:8080
+    networks:
+      - ci_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    container_name: jenkins
+    hostname: jenkins
+    ports:
+      - "8081:8080"    # Web UI
+      - "50000:50000"  # Agent port
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/ubuntu/free5gc-k8s-arm:/workspace/free5gc-k8s-arm:rw
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - GERRIT_HOST=gerrit
+      - GERRIT_PORT=29418
+      - GERRIT_WEB_URL=http://gerrit:8080
+    depends_on:
+      gerrit:
+        condition: service_healthy
+    networks:
+      - ci_net
+    restart: unless-stopped
+
+volumes:
+  gerrit_git:
+  gerrit_index:
+  gerrit_cache:
+  gerrit_db:
+  gerrit_etc:
+  jenkins_home:
+
+networks:
+  ci_net:
+    driver: bridge

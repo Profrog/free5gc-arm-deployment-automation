@@ -1,0 +1,30 @@
+# experiment-c-t1.yaml — NWDAF 동적 전환, 대규모 트래픽
+---
+metadata:
+  name: "C-T1: NWDAF Dynamic + Large Traffic"
+  matrix_id: "C-T1"
+
+nwdaf:
+  enabled: true
+  wait_ready: true
+
+cni:
+  initial: "ipvlan"    # 일부러 ipvlan → NWDAF가 macvlan로 전환해야 함
+
+phases:
+  - name: "large_traffic"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "500Mbps"
+      duration: "120s"
+    expected_cni: "macvlan"
+
+measurement:
+  monitor_interval: 5
+  repetitions: 5
+
+validation:
+  switch_expected: true
+  switch_direction: "ipvlan → macvlan"

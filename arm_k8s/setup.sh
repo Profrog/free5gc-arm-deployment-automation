@@ -146,15 +146,19 @@ deploy() {
     kubectl apply -k "$SCRIPT_DIR/free5gc-webui" -n "$NAMESPACE"
 
     # 5) UERANSIM gNB
-    log "  [5/6] UERANSIM gNB"
+    log "  [5/7] UERANSIM gNB"
     kubectl apply -k "$SCRIPT_DIR/ueransim/ueransim-gnb" -n "$NAMESPACE"
     sleep 10
 
     # 6) UERANSIM UEs
-    log "  [6/6] UERANSIM UEs"
+    log "  [6/7] UERANSIM UEs"
     kubectl apply -k "$SCRIPT_DIR/ueransim/ueransim-ue" -n "$NAMESPACE"
 
-    ok "Deployment complete"
+    # 7) NWDAF (replicas=0, test job에서 on/off)
+    log "  [7/7] NWDAF (deployed OFF — scale to 1 to enable)"
+    kubectl apply -k "$SCRIPT_DIR/nwdaf" -n "$NAMESPACE"
+
+    ok "Deployment complete (NWDAF: off — use 'kubectl scale deploy/nwdaf -n free5gc --replicas=1' to enable)"
 }
 
 # ════════════════════════════════════════════

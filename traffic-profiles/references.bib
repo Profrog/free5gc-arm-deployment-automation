@@ -1,0 +1,537 @@
+% references.bib — UPF traffic profile 설계 참고문헌
+% upf-stress.yaml / upf-stress-slice2.yaml 프로파일의 근거 논문
+
+@article{mishra2026kernel,
+  title     = {Kernel-Level Per-Slice {UPF} Latency Measurement in Containerised {5G} Core Networks},
+  author    = {Mishra, Akhil Dev and Pandey, Mayank},
+  journal   = {arXiv preprint arXiv:2605.28185},
+  year      = {2026},
+  month     = may,
+  url       = {https://arxiv.org/abs/2605.28185},
+  note      = {eMBB forwarding delay p99: 574--1243\,\textmu s under light--heavy load. 
+               TC-BPF instrumentation, open5GS, 3 slices, 28M delay pairs.}
+}
+
+@misc{s5uishida2023upf,
+  title        = {Simple Measurement of {UPF} Performance},
+  author       = {s5uishida},
+  year         = {2023},
+  month        = dec,
+  howpublished = {GitHub Repository},
+  url          = {https://github.com/s5uishida/simple_measurement_of_upf_performance},
+  note         = {free5GC UPF v1.2.0: TCP 233\,Mbps, UDP 500M offered $\rightarrow$ 382\,Mbps received (23\% loss), RTT 0.786\,ms. 
+                  PacketRusher + iperf3, VirtualBox VM 2-core.}
+}
+
+@techreport{intel2024upf,
+  title       = {{5G} Core User Plane Function ({UPF}) Solution on 4th Gen {Intel} {Xeon} Scalable Processors},
+  institution = {Intel Network Builders},
+  year        = {2024},
+  url         = {https://builders.intel.com/docs/networkbuilders/5g-flexcore-2-0-user-plane-function-with-intel-infrastructure-power-manager-on-red-hat-openshift-container-platform-using-4th-gen-intel-xeon-scalable-processors-and-dell-poweredge-r760-1717490636.pdf},
+  note        = {DPDK-based UPF, 948\,Gbps (94.8\% line rate), 0\% packet loss. Commercial-scale upper bound reference.}
+}
+
+% ── 추가 참고 (free5GC 자체 / 3GPP QoS) ──
+
+@inproceedings{free5gc,
+  title     = {free5GC: An Open-Source {5G} Core Network},
+  author    = {{free5GC Team}},
+  year      = {2022},
+  url       = {https://free5gc.org},
+  note      = {Go-based 5GC implementation. UPF uses gtp5g kernel module for GTP-U.
+               Default DNN: ``internet'' (SST:1). 
+               See official example configs: https://github.com/free5gc/free5gc/tree/main/config}
+}
+
+% DNN 구성 출처 정리:
+%   - "internet" (SST:1/SD:000001): free5GC 공식 기본 예제 DNN
+%     https://github.com/free5gc/free5gc/blob/main/config/smfcfg.yaml
+%   - "streaming" (SST:1/SD:000002): 본 testbed에서 multi-slice 검증을 위해 자체 추가
+%     출처: 본 프로젝트 arm_k8s/free5gc/slices/slice2/smf2/smf-configmap.yaml
+%   - 5QI=9 (internet), 5QI=8 (streaming): 3GPP TS 23.501 Table 5.7.4-1 기반 선정
+
+@standard{3gpp23501,
+  title        = {{3GPP TS 23.501}: System architecture for the {5G} System ({5GS})},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {Table 5.7.4-1: 5QI characteristics. 5QI=9: Non-GBR, best effort, packet delay budget 300ms.
+                  UPF role: PDU session anchor, GTP-U tunneling, packet forwarding.
+                  N3/N4/N6 interface definitions. Network interface implementation is vendor-specific (not standardized).}
+}
+
+@standard{3gpp23288,
+  title        = {{3GPP TS 23.288}: Architecture enhancements for {5G} System ({5GS}) to support network data analytics services},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {NWDAF role: data collection, analytics generation, exposure to NFs.
+                  Nnwdaf\_AnalyticsInfo, Nnwdaf\_EventsSubscription services.
+                  Analytics IDs: Network Performance, UE Mobility, Abnormal Behaviour.
+                  Standard supports NWDAF-driven policy decisions; execution mechanism is outside 3GPP scope.}
+}
+
+@standard{3gpp29244,
+  title        = {{3GPP TS 29.244}: Interface between the Control Plane and the User Plane nodes ({PFCP})},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {PFCP Session Establishment/Modification/Deletion.
+                  Usage Reporting Rule (URR): periodic usage reports from UPF to SMF.
+                  CNI switching is independent of PFCP sessions (sessions maintained across transition).}
+}
+
+@article{dranet2025,
+  title     = {{DRANET}: A Composable Architecture for High-Performance Networking in {Kubernetes}},
+  author    = {Ojea, Antonio and others},
+  journal   = {arXiv preprint arXiv:2506.23628},
+  year      = {2025},
+  month     = jun,
+  url       = {https://arxiv.org/abs/2506.23628},
+  note      = {DRA-based network device management. DeviceClass abstraction for ipvlan/macvlan/SR-IOV/RDMA.
+               Runtime network backend switching via ResourceClaim.
+               Original target: AI/ML workloads. Application to 5GC UPF is novel (this work).}
+}
+
+@misc{k8s_dra,
+  title        = {Dynamic Resource Allocation ({DRA}) in {Kubernetes}},
+  author       = {{Kubernetes SIG-Node}},
+  year         = {2026},
+  howpublished = {Kubernetes Documentation, KEP-3063, KEP-4381},
+  url          = {https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/},
+  note         = {GA in Kubernetes v1.34 (2026). Enables runtime resource allocation/deallocation.
+                  DeviceClass $\rightarrow$ ResourceClaim $\rightarrow$ ResourceSlice hierarchy.}
+}
+
+@article{nwdaf_6g_2026,
+  title     = {{LLM}-Enabled {NWDAF}: A Step Toward {AI}-Native {6G} Network Intelligence},
+  author    = {{University of Waterloo et al.}},
+  journal   = {arXiv preprint arXiv:2606.11877},
+  year      = {2026},
+  month     = jun,
+  url       = {https://arxiv.org/abs/2606.11877},
+  note      = {Open-source NWDAF limitations. LLM integration for natural-language analytics.
+               Emphasizes need for closed-loop automation.
+               Differs from our work: they enhance analysis (LLM), we enhance execution (DRANET).}
+}
+
+@misc{packetrusher,
+  title        = {{PacketRusher}: {5G} Core Network Performance Tester},
+  author       = {{Hewlett Packard Enterprise}},
+  year         = {2023},
+  howpublished = {GitHub Repository},
+  url          = {https://github.com/HewlettPackard/PacketRusher},
+  note         = {Go-based gNB/UE simulator with iperf3 integration for UPF throughput measurement.}
+}
+
+% ══════════════════════════════════════════════════════════════════════
+% CNI 타입별 성능 차이 근거 (ipvlan vs macvlan KPI 영향 인과관계)
+% "네트워크 인터페이스 전환 후 KPI를 비교하여 전환의 올바름을 판단할 수 있는가?"
+% ══════════════════════════════════════════════════════════════════════
+
+% ── A. 직접 근거: macvlan/ipvlan 성능 차이가 측정 가능함 ──
+
+@inproceedings{shs2023macvlan_ipvlan,
+  title     = {Container network architecture and performance analysis of {Macvlan} and {IPvlan}},
+  author    = {Li, X. and others},
+  booktitle = {SHS Web of Conferences (EIMM 2023)},
+  volume    = {169},
+  pages     = {01072},
+  year      = {2023},
+  publisher = {EDP Sciences},
+  url       = {https://www.shs-conferences.org/articles/shsconf/abs/2023/15/shsconf_eimm2023_01072/shsconf_eimm2023_01072.html},
+  note      = {macvlan과 ipvlan의 직접 성능 비교.
+               결과: ipvlan이 일반 환경에서 더 나은 network performance.
+               의의: CNI 타입 변경이 throughput/latency에 측정 가능한 차이를 만듦을 실증.}
+}
+
+@article{mdpi2024cni_tuning,
+  title     = {Performance and Latency Efficiency Evaluation of {Kubernetes} Container Network Interfaces for Built-In and Custom Tuned Profiles},
+  author    = {Nikolaidis, E. and others},
+  journal   = {Electronics},
+  volume    = {13},
+  number    = {19},
+  pages     = {3972},
+  year      = {2024},
+  publisher = {MDPI},
+  url       = {https://www.mdpi.com/2079-9292/13/19/3972},
+  note      = {CNI별 packet size/workload type에 따른 성능 차이 측정.
+               결과: 특정 CNI가 특정 use case에 더 적합 (one-size-fits-all 아님).
+               tuning profile로 완화 가능하지만, CNI 자체의 영향이 유의미.
+               의의: CNI 선택이 KPI에 영향을 주며, workload 조건에 따라 최적 CNI가 달라짐.}
+}
+
+@inproceedings{koukis2024edge_cni,
+  title     = {Performance Evaluation of {Kubernetes} Networking Approaches across Constraint Edge Environments},
+  author    = {Koukis, Georgios and Skaperas, Sotiris and Kapetanidou, Ioanna Angeliki and Mamatas, Lefteris and Tsaoussidis, Vassilis},
+  booktitle = {Proc. IEEE INFOCOM ICCN Workshops},
+  year      = {2024},
+  address   = {Vancouver, Canada},
+  url       = {https://arxiv.org/abs/2401.07674},
+  note      = {Edge(자원 제약) 환경에서 CNI별 throughput/CPU/memory 차이 측정.
+               결과: 자원 제약 환경에서 CNI 선택의 성능 영향이 더 크게 나타남.
+               의의: ARM64와 유사한 제약 환경에서 CNI → KPI 인과관계가 더 명확.}
+}
+
+@inproceedings{5gc_k8s_baremetal2024,
+  title     = {A Brief Performance Comparison of Bare-Metal and {Kubernetes} Deployments for {5G} Core Control Plane Network Functions using {Open5GS}},
+  author    = {Mthethwa, S. and others},
+  booktitle = {Proc. IEEE Conf.},
+  year      = {2024},
+  url       = {https://www.researchgate.net/publication/384801122},
+  note      = {K8s 위 5GC가 bare-metal 대비 throughput 7\% 감소 (300+ UE).
+               의의: K8s 네트워킹 레이어가 5GC 성능의 실질적 병목임을 실증.
+               CNI 최적화가 5GC 성능에 직접 영향을 줄 수 있는 근거.}
+}
+
+@inproceedings{qi2021cni_assessment,
+  title     = {Assessing Container Network Interface Plugins: Functionality, Performance, and Scalability},
+  author    = {Qi, Shixiong and Kulkarni, Sameer G. and Ramakrishnan, K. K.},
+  booktitle = {Proc. IEEE Int. Symp. on Reliable Distributed Systems (SRDS)},
+  year      = {2021},
+  url       = {https://par.nsf.gov/servlets/purl/10299326},
+  note      = {CNI별 throughput/latency/scalability 체계적 비교 (macvlan 포함).
+               방법론: iperf3 + netperf, 반복 측정, 통계 처리.
+               의의: CNI 벤치마킹 방법론의 선례. 본 연구 실험 설계의 근거.}
+}
+
+% ── B. 방법론 근거: KPI 비교로 전환의 올바름을 판단하는 것이 유효한 방법인가 ──
+
+@standard{3gpp23288_feedback,
+  title        = {{3GPP TS 23.288}: Architecture enhancements for {5G} System to support network data analytics services},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {§6.1: NWDAF analytics feedback loop 정의.
+                  NWDAF가 판단을 내리고 → 실행 후 → KPI 변화를 관측하여 판단의 정확성을 평가.
+                  Analytics accuracy는 실행 전후 KPI 비교로 측정하도록 설계됨.
+                  의의: ``전환 후 KPI 비교로 판단의 올바름을 검증''하는 방식은 3GPP 표준이 정의한 패턴.}
+}
+
+@standard{etsi_zsm,
+  title        = {{ETSI GS ZSM 002}: Zero-touch network and Service Management ({ZSM}); Reference Architecture},
+  organization = {ETSI},
+  year         = {2022},
+  url          = {https://www.etsi.org/deliver/etsi_gs/ZSM/001_099/002/01.01.01_60/gs_ZSM002v010101p.pdf},
+  note         = {Closed-loop automation: Intent → Decision → Execution → Observation → Evaluation.
+                  ``판단의 올바름''은 Observation 단계에서 KPI가 Intent 방향으로 변했는지로 평가.
+                  의의: 본 연구의 검증 방식(전환 후 KPI 비교)은 ETSI ZSM closed-loop 원칙에 부합.}
+}
+
+@standard{itu_y1731,
+  title        = {{ITU-T Y.1731}: Operation, administration and maintenance ({OAM}) functions and mechanisms for {Ethernet}-based networks},
+  organization = {ITU-T},
+  year         = {2020},
+  note         = {Performance Monitoring (PM): frame delay, frame loss ratio, throughput 측정.
+                  Configuration 변경 전후 PM 값 비교로 변경의 효과를 판단하는 것은 표준 운용 절차.
+                  의의: 네트워크 변경 전후 성능 비교가 통신 업계 표준 평가 방법임을 뒷받침.}
+}
+
+@standard{etsi_nfv_tst,
+  title        = {{ETSI GS NFV-TST 009}: Network Functions Virtualisation; Testing; Specification of Networking Benchmarks and Measurement Methods for {NFVI}},
+  organization = {ETSI},
+  year         = {2018},
+  url          = {https://www.etsi.org/deliver/etsi_gs/NFV-TST/001_099/009/03.01.01_60/gs_NFV-TST009v030101p.pdf},
+  note         = {NFVI 레벨 네트워킹 벤치마크 방법 정의.
+                  throughput, latency, frame loss를 측정하여 인프라 변경의 영향을 정량화.
+                  의의: 인프라 레이어(CNI) 변경의 효과를 KPI로 측정/비교하는 방법론의 표준적 근거.}
+}
+
+@techreport{oran_ric2023,
+  title        = {{O-RAN.WG2.AIML-v01.03}: {AI/ML} Workflow Description and Requirements},
+  institution  = {O-RAN Alliance},
+  year         = {2023},
+  note         = {Near-RT RIC의 closed-loop: ML model이 결정 → 실행 → 결과(KPI) 관측으로 모델 평가.
+                  Model performance는 action 전후 KPI 변화의 통계적 유의성으로 판단.
+                  의의: 통신 AI 시스템에서 ``실행 후 KPI 비교''가 판단 정확성 평가의 표준 방법.}
+}
+
+% ── C. 커널 레벨 기술 근거: 왜 macvlan/ipvlan이 KPI에 차이를 만드는가 ──
+
+@inproceedings{bandewar2015ipvlan,
+  title     = {{IPVLAN} --- The Beginning},
+  author    = {Bandewar, Mahesh},
+  booktitle = {Proc. netdev 0.1},
+  year      = {2015},
+  organization = {Google},
+  url       = {http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf},
+  note      = {ipvlan 설계 원리: MAC 주소 공유 → 커널 내부 L3 라우팅으로 패킷 전달.
+               macvlan: 별도 MAC → NIC 하드웨어 레벨에서 패킷 분리.
+               ipvlan은 CPU-bound (커널 스위칭), macvlan은 NIC-offload 가능.
+               의의: 고부하 시 macvlan이 유리, 저부하 시 ipvlan이 오버헤드 적음의 기술적 원인.}
+}
+
+@inproceedings{dplane_opt2011,
+  title     = {Data Plane Optimization in Open Virtual Routers},
+  author    = {Bifulco, Roberto and others},
+  booktitle = {Proc. ACM SIGCOMM Workshop on Virtualized Infrastructure Systems and Architectures},
+  year      = {2011},
+  url       = {https://www.researchgate.net/publication/221198708},
+  note      = {macvlan의 NAPI 기반 패킷 전달 경로 분석.
+               netif\_receive\_skb 직접 전달 vs softnet queue 경유의 throughput 차이 측정.
+               의의: 커널 패킷 처리 경로 차이가 측정 가능한 throughput/latency 차이를 만듦을 실증.}
+}
+
+@misc{netdev2023cpu_networking,
+  title        = {Assessing the Impact of {Linux} Networking on {CPU} Consumption},
+  author       = {Miola, Davide},
+  year         = {2023},
+  howpublished = {NetDev 0x17 Conference},
+  url          = {https://netdevconf.org/0x17/docs/netdev-0x17-paper34-talk-slides/},
+  note         = {Linux 네트워킹 스택 경로별 CPU cycle 소비 정량화.
+                  인터페이스 타입에 따라 패킷당 CPU cost가 다름을 측정.
+                  의의: CNI 타입 → CPU 사용량 인과관계의 커널 레벨 근거.}
+}
+
+% ── D. 프로파일 ↔ CNI 적합성 매핑 근거 (표준 트래픽 모델 + IETF 벤치마킹) ──
+
+@misc{ietf_bmwg_cni2026,
+  title        = {{CNI} Telco-Cloud Benchmarking Considerations},
+  author       = {Samizadeh, Tina and Koukis, George and Sofia, Rute C. and Tsaoussidis, Vassilis},
+  year         = {2026},
+  month        = apr,
+  howpublished = {IETF Internet-Draft, draft-samizadeh-bmwg-cni-benchmarking-02},
+  url          = {https://datatracker.ietf.org/doc/html/draft-samizadeh-bmwg-cni-benchmarking-02},
+  note         = {IETF BMWG CNI 벤치마킹 방법론.
+                  \S4.1.3: ``a CNI optimized for high-throughput TCP bulk traffic may perform
+                  suboptimally under UDP-heavy traffic, high pod churn, or policy-intensive workloads.''
+                  \S4.1.1: packet sizes 64B, 512B, 1500B 요구.
+                  \S7.4: traffic profiles --- short-lived TCP, persistent streaming, burst UDP.
+                  \S7.3: minimum 5 repetitions, warm-up/cool-down.
+                  의의: 프로파일별로 최적 CNI가 다르다는 IETF 수준 근거 + 실험 방법론 표준.}
+}
+
+@standard{3gpp_tr38913,
+  title        = {{3GPP TR 38.913}: Study on Scenarios and Requirements for Next Generation Access Technologies},
+  organization = {3GPP},
+  year         = {2022},
+  note         = {Table 7.1: eMBB target --- 100 Mbps user experienced DL, 50 Mbps UL.
+                  \S7.1: URLLC --- 1ms user plane latency.
+                  \S7.3: mMTC --- 1M devices/km\textsuperscript{2}.
+                  의의: 실험 프로파일의 throughput/latency 목표값 근거.}
+}
+
+@standard{3gpp_tr37868,
+  title        = {{3GPP TR 37.868}: Study on {RAN} Improvements for Machine-type Communications},
+  organization = {3GPP},
+  year         = {2014},
+  note         = {MTC traffic model: 소패킷 (32--256 bytes), 주기적/이벤트 기반 전송.
+                  Device density, inter-arrival time 분포 정의.
+                  의의: iot-burst.yaml의 packet\_size (128B), burst pattern의 표준 근거.}
+}
+
+@standard{3gpp_ts26114,
+  title        = {{3GPP TS 26.114}: {IP} Multimedia Subsystem ({IMS}); Multimedia telephony; Media handling and interaction},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {AMR-WB codec: 23.85 kbps, 20ms frame.
+                  VoNR RTP packet: ~60--80 bytes (IP/UDP/RTP + AMR payload).
+                  의의: vonr.yaml의 packet\_size (80B), rate (50pps)의 표준 근거.}
+}
+
+@standard{3gpp_ts22261,
+  title        = {{3GPP TS 22.261}: Service requirements for the {5G} system},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {\S7.1: eMBB --- DL 100 Mbps user experienced, 20 Gbps peak.
+                  \S7.2: mMTC --- 1M devices/km\textsuperscript{2}, battery life 10+ years.
+                  Table 7.1: KPI requirements per service category.
+                  의의: 프로파일 파라미터의 최상위 표준 근거.}
+}
+
+% ── E. NWDAF 기능 분리 (부분 구현 정당성) ──
+
+@standard{3gpp23288_rel17_split,
+  title        = {{3GPP TS 23.288}: Architecture enhancements for {5G} System to support network data analytics services (Release 17)},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {\S6.2A: NWDAF 내부 기능 분리 정의 (Rel-17 신규).
+                  ``The NWDAF may be deployed as a single NF containing both AnLF and MTLF,
+                  or as separate NF instances for AnLF and MTLF.''
+                  AnLF (Analytics Logical Function): 데이터 수집, 분석/추론 실행, 결과 출력.
+                  MTLF (Model Training Logical Function): 모델 학습, 학습된 모델을 AnLF에 제공.
+                  Nnwdaf 서비스 인터페이스: AnalyticsInfo, EventsSubscription, MLModelProvision.
+                  --- 각 기능은 독립 NF 인스턴스로 배치 가능 (부분 구현 명시적 허용).
+                  --- 단일 벤더 내부 연동 시 외부 서비스 인터페이스 불필요.
+                  의의: 본 연구가 AnLF만 구현하는 것은 3GPP Rel-17이 명시적으로 허용한 구조.}
+}
+
+@standard{3gpp23288_analytics_ids,
+  title        = {{3GPP TS 23.288}: NWDAF Analytics IDs and data collection},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {Table 6.1.1: Analytics ID 목록.
+                  - ``Network Performance'': NF별 throughput, latency, packet loss 분석.
+                  - ``Abnormal Behaviour'': KPI 이상 탐지.
+                  - ``QoS Sustainability'': QoS 유지 가능성 예측.
+                  Data collection 방식: OAM (e.g., Prometheus), direct NF subscription.
+                  본 연구는 OAM 방식 중 kubectl top(metrics-server) + /proc/net/dev 직접 수집을 사용.
+                  Output 형태: analytics report (event-based or periodic).
+                  의의: 본 연구의 ``throughput/loss 기반 전환 판단''은 Network Performance Analytics ID에 해당.}
+}
+
+@standard{3gpp23288_consumer,
+  title        = {{3GPP TS 23.288}: NWDAF analytics consumer and actions},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {\S6.1.2: NWDAF analytics consumer --- PCF, NSSF, AMF 등이 analytics를 소비.
+                  Analytics 결과에 따른 action은 consumer NF의 책임 (NWDAF는 판단만 제공).
+                  3GPP는 ``NWDAF가 직접 인프라를 변경''하는 경로를 정의하지 않음.
+                  → 본 연구에서 NWDAF가 DRANET을 직접 호출하는 것은 3GPP scope 밖이지만 위반은 아님.
+                  → 이는 operator-specific implementation에 해당.
+                  의의: NWDAF → DRANET 직접 연동은 표준이 금지하지 않는 operator 자유 영역.}
+}
+
+% ── F. ipvlan/macvlan 동일 위상 근거 ──
+
+@misc{kernel_ipvlan_doc,
+  title        = {{Linux} Kernel Documentation: {IPVLAN} Driver},
+  author       = {{Linux Kernel Community}},
+  year         = {2024},
+  howpublished = {Linux Kernel Source, Documentation/networking/ipvlan.rst},
+  url          = {https://www.kernel.org/doc/html/latest/networking/ipvlan.html},
+  note         = {ipvlan: 물리 NIC 위에 생성되는 가상 sub-interface.
+                  호스트 MAC 공유, IP 기반으로 패킷 분배.
+                  L2 mode: 동일 서브넷 내 통신. L3 mode: 라우팅 기반.
+                  macvlan과 동일 위상 (같은 물리 NIC에 attach), 로직만 다름.}
+}
+
+@misc{kernel_macvlan_doc,
+  title        = {{Linux} Kernel Documentation: {MACVLAN} Driver},
+  author       = {{Linux Kernel Community}},
+  year         = {2024},
+  howpublished = {Linux Kernel Source, Documentation/networking/macvlan.rst},
+  url          = {https://www.kernel.org/doc/html/latest/networking/macvlan.html},
+  note         = {macvlan: 물리 NIC 위에 생성되는 가상 sub-interface.
+                  독립 MAC 주소 할당, MAC 기반으로 패킷 분배.
+                  bridge/vepa/passthru/private mode.
+                  ipvlan과 동일 위상, 패킷 분배 메커니즘(MAC vs IP)만 상이.
+                  상위 프로토콜 스택(IP, TCP/UDP, GTP-U)에 투명.}
+}
+
+% ── G. NWDAF 데이터 수집 경로: OAM 방식 선택의 정당성 ──
+
+@thesis{waterloo2026upf_exposure,
+  title     = {From User-Plane Telemetry to Closed-Loop Control},
+  author    = {{University of Waterloo}},
+  school    = {University of Waterloo},
+  year      = {2026},
+  url       = {https://uwspace.uwaterloo.ca/items/110c74ee-af5f-4f6a-9cc1-e07bfca9b7d8},
+  note      = {UPF Event Exposure Service 구현 시 오버헤드 측정:
+                  - One-way delay 증가: +0.11ms (subscriber 1개 기준)
+                  - CPU 사용량 증가: +6.5\%
+                  - Memory: 소량 상수 오버헤드 (throughput 무관)
+                  의의: Nupf Event Exposure는 UPF 성능에 영향을 줌.
+                  OAM 방식(외부 수집)은 이 오버헤드가 없음 → 본 연구의 OAM 선택 정당화.}
+}
+
+@article{nwdaf_closedloop2025,
+  title     = {Towards {NWDAF}-enabled Analytics and Closed-Loop Automation in {5G} Networks},
+  author    = {University of Waterloo et al.},
+  journal   = {arXiv preprint arXiv:2505.06789},
+  year      = {2025},
+  month     = may,
+  url       = {https://arxiv.org/abs/2505.06789},
+  note      = {3GPP-compliant UPF Event Exposure Service 구현 (free5GC 수정).
+                  결론: Nupf 구현에는 UPF 소스 코드 수정이 필수.
+                  free5GC, Open5GS 모두 공식 릴리스에 Nupf 미포함 (2025년 기준).
+                  의의: Nupf 미구현이 본 연구만의 한계가 아닌 오픈소스 5GC 공통 현황.}
+}
+
+@misc{free5gc_nwdaf_blog,
+  title        = {{NWDAF} Introduction},
+  author       = {{free5GC Team}},
+  year         = {2024},
+  month        = nov,
+  howpublished = {free5GC Blog},
+  url          = {https://free5gc.org/blog/20241127/20241127/},
+  note         = {``For network management information, NWDAF also connects to the
+                  Operation, Administration and Maintenance (OAM) system. This connection
+                  provides NWDAF with essential network configuration and management data.''
+                  의의: free5GC 공식 문서에서 OAM 경유 수집을 NWDAF의 정상 경로로 명시.}
+}
+
+@article{barrachina2022cloudnative_monitoring,
+  title     = {Cloud-native {5G} experimental platform with over-the-air transmissions and end-to-end monitoring},
+  author    = {Barrachina-Mu{\~n}oz, Sergio and others},
+  journal   = {arXiv preprint arXiv:2207.11936},
+  year      = {2022},
+  url       = {https://arxiv.org/abs/2207.11936},
+  note      = {Open5GS + Prometheus 기반 CNF 모니터링을 Kubernetes에서 구현.
+                  OAM 방식으로 NF 메트릭 수집 → NWDAF 분석 파이프라인.
+                  의의: OAM(Prometheus/kubectl) 기반 수집이 학술 연구에서 표준적 방식임을 확인.}
+}
+
+@article{nwdaf_survey2025,
+  title     = {Towards Network Data Analytics in {5G} Systems and Beyond},
+  author    = {Romero, Marcos Lima and Suyama, Ricardo},
+  journal   = {arXiv preprint arXiv:2506.04860},
+  year      = {2025},
+  month     = jun,
+  url       = {https://arxiv.org/abs/2506.04860},
+  note      = {NWDAF 연구 23편 서베이.
+                  대부분이 OAM/외부 수집 방식 사용 (Prometheus, 외부 dataset).
+                  NF Event Exposure 직접 구현한 연구는 소수.
+                  ``None of the most widely used 5G open-source projects have yet officially
+                  deployed NWDAF to their official repositories.''
+                  의의: Nupf 미구현은 오픈소스 생태계 전체의 현실. OAM 방식이 학계 표준.}
+}
+
+% ── H. ML 모델 선택 근거 (Random Forest) ──
+
+@article{breiman2001random,
+  title     = {Random Forests},
+  author    = {Breiman, Leo},
+  journal   = {Machine Learning},
+  volume    = {45},
+  number    = {1},
+  pages     = {5--32},
+  year      = {2001},
+  publisher = {Springer},
+  note      = {Random Forest 원논문.
+                  Ensemble of decision trees, bagging + random feature selection.
+                  장점: 과적합 방지, 해석 가능 (feature importance), 빠른 추론.
+                  의의: 본 연구에서 사용한 분류 알고리즘의 원 출처.}
+}
+
+@misc{3gpp_ai_ml_model_agnostic,
+  title        = {{3GPP TS 23.288}: {NWDAF} — {ML} Algorithm Agnosticism},
+  organization = {3GPP},
+  year         = {2023},
+  note         = {TS 23.288은 NWDAF의 아키텍처(AnLF/MTLF)와 데이터 흐름만 정의.
+                  특정 ML 알고리즘을 명시하거나 요구하지 않음 (model-agnostic).
+                  알고리즘 선택은 구현자(operator/vendor)의 재량.
+                  의의: Random Forest 선택이 표준 위반 아님. 어떤 모델이든 표준 적합.}
+}
+
+@article{nwdaf_ml_usage_survey,
+  title     = {Towards Network Data Analytics in {5G} Systems and Beyond},
+  author    = {Romero, Marcos Lima and Suyama, Ricardo},
+  journal   = {arXiv preprint arXiv:2506.04860},
+  year      = {2025},
+  note      = {NWDAF 연구 23편 서베이에서 사용된 ML 모델:
+                  LSTM(6), Random Forest(4), XGBoost/GBM(3), Decision Tree(3),
+                  SVM(2), MLP/CNN(2), LLM(1).
+                  Random Forest는 NWDAF 연구에서 가장 많이 사용되는 모델 중 하나.
+                  의의: 본 연구의 모델 선택이 학계 관행에 부합.}
+}
+
+@inproceedings{bayleyegn2024nwdaf_rf,
+  title     = {Real-time Monitoring of {5G} Networks: An {NWDAF} and {ML} based {KPI} Prediction},
+  author    = {Bayleyegn, A. A. and Fern{\'a}ndez, Z. and Granelli, F.},
+  booktitle = {IEEE 10th Int. Conf. Network Softwarization (NetSoft)},
+  pages     = {31--36},
+  year      = {2024},
+  note      = {free5GC + NWDAF에서 Random Forest/Decision Tree/Linear Regression 사용.
+                  실시간 KPI 예측. 본 연구와 유사한 testbed(free5GC) + 모델(RF) 조합.
+                  의의: free5GC 환경에서 Random Forest 기반 NWDAF의 선례.}
+}
+
+% ── I. 실험 격리 — CPU Pinning ──
+
+@misc{k8s_cpu_manager,
+  title        = {{Kubernetes} {CPU} Manager: Control {CPU} Affinity for Containers},
+  author       = {{Kubernetes SIG-Node}},
+  year         = {2024},
+  howpublished = {Kubernetes Documentation},
+  url          = {https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/},
+  note         = {CPU Manager static policy: Guaranteed QoS Pod에 정수 CPU 요청 시
+                  exclusive cpuset 할당. 물리 코어를 Pod에 pinning.
+                  의의: UPF에 전용 코어 할당 → 모니터링과 격리 → 측정 왜곡 방지.}
+}

@@ -1,0 +1,55 @@
+# APN Traffic Profile Schema
+# 이 파일은 프로파일 YAML의 포맷을 정의합니다.
+
+---
+# apn: DNN 이름 (free5gc SMF에 등록된 DNN과 일치해야 함)
+apn: string
+
+# 프로파일 메타정보
+metadata:
+  name: string            # 사람이 읽기 위한 프로파일 이름
+  description: string     # 시나리오 설명
+  version: string         # 프로파일 버전
+
+# 네트워크 슬라이스 정보
+slice:
+  sst: int               # Slice/Service Type (1~255)
+  sd: string             # Slice Differentiator (6-digit hex, e.g., "000001")
+
+# QoS 파라미터
+qos:
+  fiveqi: int            # 5QI 값 (1~255)
+  priority: int          # ARP priority (1~15)
+  mbr_uplink: string     # Maximum Bit Rate UL (e.g., "100Mbps", "500Kbps")
+  mbr_downlink: string   # Maximum Bit Rate DL
+  gbr_uplink: string     # Guaranteed Bit Rate UL (GBR flow일 때)
+  gbr_downlink: string   # Guaranteed Bit Rate DL
+
+# 트래픽 패턴 정의
+traffic_pattern:
+  protocol: string       # "udp" | "tcp" | "icmp"
+  direction: string      # "uplink" | "downlink" | "bidirectional"
+  packet_size: int       # 패킷 크기 (bytes)
+  rate: string           # 전송 속도 (e.g., "10Mbps", "100pps", "1Kbps")
+  duration: string       # 전송 지속 시간 (e.g., "60s", "5m", "1h")
+  burst:                 # (optional) 버스트 패턴
+    enabled: bool
+    packets: int         # 버스트당 패킷 수
+    interval: string     # 버스트 간격 (e.g., "5s")
+  jitter: string         # (optional) 패킷 간격 랜덤 변동 (e.g., "10ms")
+
+# UE 시뮬레이션 설정
+ue:
+  count: int             # 동시 UE 수
+  imsi_start: string     # 시작 IMSI (e.g., "001010000000010")
+  ramp_up: string        # UE 등록 간격 (e.g., "1s" → 1초마다 1대씩)
+
+# 측정 설정
+measurement:
+  metrics:               # 수집할 메트릭 목록
+    - throughput
+    - latency
+    - jitter
+    - packet_loss
+  interval: string       # 메트릭 수집 주기 (e.g., "1s")
+  output: string         # 결과 파일 경로 (e.g., "results/internet_result.json")

@@ -1,0 +1,217 @@
+// free5gc CI Pipeline
+// Gerrit patchset-created → 빌드 → 통합 테스트 → Gerrit Verified ±1
+//
+// 트리거: Gerrit patchset-created on free5gc/* projects
+// 워크스페이스: /workspace/free5gc-k8s-arm (호스트 마운트)
+
+pipeline {
+    agent any
+
+    environment {
+        PROJECT_DIR    = '/workspace/free5gc-k8s-arm'
+        SOURCE_DIR     = "${PROJECT_DIR}/free5gc_source"
+        BUILD_DIR      = "${PROJECT_DIR}/free5gc_build"
+        DOCKER_DIR     = "${PROJECT_DIR}/arm_docker"
+        GOPATH         = "${WORKSPACE}/go"
+        PATH           = "/usr/local/go/bin:${env.PATH}"
+        // Gerrit 환경변수 (gerrit-trigger 플러그인이 자동 주입)
+        GERRIT_PROJECT = "${env.GERRIT_PROJECT ?: ''}"
+        GERRIT_REFSPEC = "${env.GERRIT_REFSPEC ?: ''}"
+        GERRIT_BRANCH  = "${env.GERRIT_BRANCH ?: 'main'}"
+    }
+
+    parameters {
+        string(name: 'NF_NAME', defaultValue: '', description: 'NF to build (auto-detected from Gerrit project)')
+        string(name: 'UPSTREAM_TAG', defaultValue: 'v3.4.3', description: 'Upstream baseline tag')
+    }
+
+    stages {
+        stage('Detect NF') {
+            steps {
+                script {
+                    // Gerrit project: free5gc/amf → NF_NAME: amf
+                    if (env.GERRIT_PROJECT) {
+                        env.TARGET_NF = env.GERRIT_PROJECT.split('/').last()
+                    } else if (params.NF_NAME) {
+                        env.TARGET_NF = params.NF_NAME
+                    } else {
+                        error("NF_NAME을 지정하거나 Gerrit trigger를 통해 실행해야 합니다.")
+                    }
+                    echo "▶ Target NF: ${env.TARGET_NF}"
+                    echo "▶ Gerrit refspec: ${env.GERRIT_REFSPEC}"
+                    echo "▶ Upstream baseline: ${params.UPSTREAM_TAG}"
+                }
+            }
+        }
+
+        stage('Checkout & Apply Patch') {
+            steps {
+                script {
+                    def nfDir = "${SOURCE_DIR}/${env.TARGET_NF}"
+
+                    dir(nfDir) {
+                        // upstream 기준으로 리셋
+                        sh """
+                            git fetch origin
+                            git checkout ${params.UPSTREAM_TAG} || git checkout ${env.GERRIT_BRANCH}
+                            git reset --hard
+                        """
+
+                        // Gerrit patchset 적용
+                        if (env.GERRIT_REFSPEC) {
+                            sh """
+                                git fetch origin ${env.GERRIT_REFSPEC}
+                                git cherry-pick FETCH_HEAD --no-commit || {
+                                    echo "Cherry-pick conflict!"
+                                    git cherry-pick --abort
+                                    exit 1
+                                }
+                            """
+                            echo "✓ Gerrit patchset applied on top of ${params.UPSTREAM_TAG}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build NF') {
+            steps {
+                script {
+                    def nf = env.TARGET_NF
+
+                    if (nf == 'ueransim') {
+                        // C++ 빌드
+                        dir("${SOURCE_DIR}/ueransim") {
+                            sh """
+                                mkdir -p build && cd build
+                                cmake ..
+                                make -j\$(nproc)
+                                mkdir -p ${BUILD_DIR}/ueransim
+                                cp build/nr-gnb ${BUILD_DIR}/ueransim/
+                                cp build/nr-ue ${BUILD_DIR}/ueransim/
+                            """
+                        }
+                    } else {
+                        // Go NF 빌드
+                        dir("${SOURCE_DIR}/${nf}") {
+                            sh """
+                                # cmd/main.go 위치 탐색
+                                CMD_DIR=\$(find cmd -name "main.go" -type f | head -1 | xargs dirname)
+                                echo "Building ${nf} from \$CMD_DIR"
+                                mkdir -p ${BUILD_DIR}/${nf}
+                                cd \$CMD_DIR
+                                CGO_ENABLED=0 go build -ldflags "-s -w" -o ${BUILD_DIR}/${nf}/${nf} main.go
+                            """
+                        }
+                    }
+                    echo "✓ ${nf} built successfully"
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                script {
+                    def nf = env.TARGET_NF
+
+                    // 기존 docker-build.sh 로직 재사용
+                    sh """
+                        cd ${PROJECT_DIR}
+                        ./arm_init/docker-build.sh ${nf}
+                    """
+                    echo "✓ Docker image arm-curl:${nf} built and imported"
+                }
+            }
+        }
+
+        stage('Deploy to K8s') {
+            steps {
+                script {
+                    def nf = env.TARGET_NF
+
+                    // 해당 NF pod만 재시작 (rolling update)
+                    sh """
+                        kubectl rollout restart deployment/${nf} -n free5gc 2>/dev/null || {
+                            echo "Deployment ${nf} not found, running full deploy..."
+                            cd ${PROJECT_DIR}
+                            ./arm_init/deploy.sh
+                        }
+                    """
+
+                    // Pod ready 대기
+                    sh """
+                        kubectl wait --for=condition=ready pod -l app=${nf} -n free5gc \
+                            --timeout=120s 2>/dev/null || echo "WARN: Pod readiness timeout"
+                    """
+                }
+            }
+        }
+
+        stage('Integration Test') {
+            steps {
+                script {
+                    // 전체 5GC + UERANSIM 통합 테스트
+                    def result = sh(
+                        script: """
+                            cd ${PROJECT_DIR}
+                            ./arm_service/test-connectivity.sh 2>&1
+                        """,
+                        returnStatus: true
+                    )
+
+                    if (result != 0) {
+                        env.VERIFIED = '-1'
+                        error("Integration test FAILED — 수정된 ${env.TARGET_NF}가 전체 시스템 호환성을 깨뜨립니다.")
+                    } else {
+                        env.VERIFIED = '+1'
+                        echo "✓ Integration test PASSED — ${env.TARGET_NF} 변경이 upstream과 호환됩니다."
+                    }
+                }
+            }
+        }
+
+        stage('Gerrit Verify') {
+            when {
+                expression { env.GERRIT_REFSPEC != null && env.GERRIT_REFSPEC != '' }
+            }
+            steps {
+                script {
+                    // Gerrit REST API로 Verified 레이블 설정
+                    def changeId = env.GERRIT_CHANGE_NUMBER
+                    def patchset = env.GERRIT_PATCHSET_NUMBER
+                    def verified = env.VERIFIED ?: '+1'
+
+                    sh """
+                        curl -s -X POST \
+                            "http://gerrit:8080/a/changes/${changeId}/revisions/${patchset}/review" \
+                            -H "Content-Type: application/json" \
+                            -d '{"labels": {"Verified": ${verified}}, "message": "Jenkins CI: ${verified == '+1' ? 'PASS' : 'FAIL'} — ${env.TARGET_NF} integration test"}'
+                    """
+                    echo "▶ Gerrit Verified ${verified} posted to change ${changeId}"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // 소스 디렉토리를 upstream 상태로 복원
+                def nfDir = "${SOURCE_DIR}/${env.TARGET_NF}"
+                sh """
+                    cd ${nfDir} 2>/dev/null && git checkout ${params.UPSTREAM_TAG} 2>/dev/null && git reset --hard || true
+                """
+            }
+        }
+        success {
+            echo "═══════════════════════════════════════"
+            echo "✓ CI PASSED: ${env.TARGET_NF} 변경이 upstream ${params.UPSTREAM_TAG}과 호환됩니다."
+            echo "═══════════════════════════════════════"
+        }
+        failure {
+            echo "═══════════════════════════════════════"
+            echo "✗ CI FAILED: ${env.TARGET_NF} 변경이 전체 시스템을 깨뜨립니다."
+            echo "═══════════════════════════════════════"
+        }
+    }
+}

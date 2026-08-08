@@ -1,0 +1,505 @@
+# Monitoring Eyes — Architecture & Design Document
+
+> CI/CD 파이프라인의 KPI 자동 모니터링 및 이상 탐지 시스템
+
+---
+
+## 1. Problem Statement
+
+### 배경
+대규모 통신 SW의 CI/CD 파이프라인에서는 매일 수십 개의 Stability/Capacity/Robustness 테스트가 빌드별로 실행된다. 각 테스트는 수십 개의 KPI(CPU, Memory, Throughput, Latency, Packet Loss 등)를 산출하며, 빌드 간 이 수치의 변화를 감지하는 것이 SW 품질 관리의 핵심이다.
+
+### 문제
+- 수동 감시: 엔지니어가 매일 포탈에서 결과를 하나씩 확인 → 시간 소모, 누락 발생
+- Threshold 관리: KPI마다 정상 범위가 다르고, SW 변경에 따라 범위 자체가 drift
+- 분류 어려움: 실패 원인이 SW 결함인지, 노드 HW 문제인지, 테스트 환경 문제인지 분류 필요
+- Improvement도 이상: 성능이 "좋아진" 것도 기능 오작동의 부작용일 수 있음
+
+### 목표
+1. KPI 변화 자동 감지 (degradation + improvement 모두)
+2. 빌드 간 비교 자동화 (component version 변경 추적 포함)
+3. 실패 원인 분류 지원 (노드 문제 vs SW 결함)
+4. KPI threshold 자동 튜닝
+5. AI agent와 연동하여 자연어 기반 분석 지원 (MCP)
+
+---
+
+## 2. System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     CI/CD Pipeline                            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │ Build    │→ │ Test     │→ │ Portal   │                  │
+│  │ System   │  │ Runner   │  │ Logs     │                  │
+│  └──────────┘  └──────────┘  └────┬─────┘                  │
+└────────────────────────────────────┼────────────────────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    │  Data Collection (Cron)          │
+                    │                                  │
+                    │  ┌───────────┐  ┌────────────┐  │
+                    │  │Checkpoint │  │  Copylog   │  │
+                    │  │ Extractor │  │ Collector  │  │
+                    │  └─────┬─────┘  └─────┬──────┘  │
+                    └────────┼──────────────┼─────────┘
+                             │              │
+                    ┌────────▼──────────────▼─────────┐
+                    │       Data Store (File-based)     │
+                    │                                   │
+                    │  Checkpoint_History/  Copylog/    │
+                    │  ├── TC_A/           ├── TC_A/   │
+                    │  │   ├── Build_1/   │   ├── ... │
+                    │  │   ├── Build_2/   │           │
+                    │  │   └── ...        │           │
+                    │  └── _build_info/    └── ...    │
+                    └──────────┬───────────────────────┘
+                               │
+              ┌────────────────┼────────────────────┐
+              │                │                     │
+     ┌────────▼───────┐ ┌─────▼──────┐  ┌──────────▼──────────┐
+     │  MCP Server    │ │ Streamlit  │  │  Cron Jobs          │
+     │  (AI Agent용)  │ │  UI (Web)  │  │  (Daily Summary,    │
+     │                │ │            │  │   Auto Alert)       │
+     │  20+ Tools     │ │  Dashboard │  │                     │
+     │  - get_kpi     │ │  Charts    │  │  ci_daily_cron.py   │
+     │  - compare     │ │  Diff      │  │  ai_report.py       │
+     │  - detect      │ │  Search    │  │                     │
+     │  - tune        │ │            │  │                     │
+     └───────┬────────┘ └────────────┘  └─────────────────────┘
+             │
+     ┌───────▼────────┐
+     │  AI Agent      │
+     │  (Kiro/Claude) │
+     │                │
+     │  자연어로 질의  │
+     │  → MCP tool    │
+     │  → 분석 결과   │
+     └────────────────┘
+```
+
+---
+
+## 3. File Structure
+
+```
+testrunner/
+├── testrunner.py                    # Streamlit 메인 앱 (36KB)
+├── pyproject.toml                   # 패키지 설정 (MCP 서버)
+├── requirements.txt                 # Python 의존성
+├── Dockerfile                       # 컨테이너 배포
+├── setup_mcp.sh                     # MCP 서버 환경 설정
+├── README.md                        # 프로젝트 소개
+│
+├── monitoring_eyes_mcp/             # MCP 서버 (AI Agent 연동)
+│   ├── __init__.py                  # 코어 로직 (60KB, 20+ tools)
+│   ├── __main__.py                  # 엔트리포인트
+│   └── tunning_rule.txt             # KPI 튜닝 규칙 정의
+│
+├── func_epg/                        # EPG 제품 전용 기능
+│   ├── epg_getkpi.py               # KPI 수집 및 파싱 (25KB)
+│   ├── epg_research.py             # 데이터 분석/비교 (17KB)
+│   ├── epg_detect.py               # 이상 탐지 로직 (6KB)
+│   ├── epg_ci.py                   # CI 상태 분석 (8KB)
+│   ├── epg_manual_cmd.py           # 수동 테스트 커맨드 생성
+│   ├── epg_kiro.py                 # AI agent 연동 헬퍼
+│   ├── epg_ai.py                   # AI 기반 분석
+│   ├── ai_kpi_search.py            # Semantic KPI 검색
+│   └── ai_build_index.py           # 빌드 정보 인덱싱
+│
+├── func_extend/                     # 확장 기능 (외부 연동)
+│   ├── jira_client.py              # Jira REST API 클라이언트 (29KB)
+│   ├── gerrit_client.py            # Gerrit API 클라이언트 (6KB)
+│   ├── ai_report.py               # AI 기반 일일 리포트 생성 (20KB)
+│   ├── ci_daily_cron.py           # 일일 CI 요약 cron
+│   ├── search_epg_tr.py            # TR 검색
+│   ├── fetch_confluence_kpi_guide.py  # Confluence KPI 가이드 수집
+│   ├── EPG_MAILSERVICE/            # 이메일 알림 서비스
+│   ├── PCSM_MAILSERVICE/           # PCSM 이메일 서비스
+│   └── OKR_SERVICE/                # OKR 연동 서비스
+│
+├── func_pcsm/                       # PCSM 제품 전용 기능
+│   ├── pcsm_getkpi.py             # PCSM KPI 수집 (16KB)
+│   ├── pcsm_research.py           # PCSM 데이터 분석 (6KB)
+│   └── pcsm_range.py              # PCSM 범위 계산 (9KB)
+│
+├── func_deploy/                     # 배포 자동화
+│   ├── deploy_kpi_monitor.py       # Docker 빌드 & 배포
+│   └── check_kpi_monitor.py        # 컨테이너 상태 체크 & 자동 재시작
+│
+├── kpi_encyclopedia/                # KPI 설명 문서 (50+ 항목)
+│   ├── _index.json                 # KPI 인덱스
+│   ├── _summary.json               # 요약 메타데이터
+│   ├── CPU_Usage_UPF_Background.md
+│   ├── Memory_Usage_Upf.md
+│   ├── UPF_Packet_Loss.md
+│   └── ... (50+ markdown files)
+│
+├── kpi_index/                       # Semantic Search 인덱스
+│   ├── kpi_meta.json               # 메타데이터
+│   ├── kpi.index                   # FAISS/벡터 인덱스 (1.3MB)
+│   └── model_onnx/                 # 임베딩 모델 (ONNX)
+│
+├── EPG_Checkpoint_History/          # [DATA] 빌드별 KPI 시계열
+│   ├── TC37543.6.4.9/              # TC별 디렉토리 (80+ TCs)
+│   │   ├── EPG_Build_A/
+│   │   │   └── checkpoint.txt      # KPI name=value pairs
+│   │   ├── EPG_Build_B/
+│   │   └── ...
+│   └── _build_info/                # 빌드별 component version JSON
+│       ├── Build_A.json
+│       └── Build_B.json
+│
+├── EPG_Copylog/                     # [DATA] 빌드별 상세 로그 요약
+│   └── TC37543.6.4.9/              # (67 TCs, 빌드별 디렉토리)
+│
+├── PCSM_Checkpoint_History/         # [DATA] PCSM 제품 KPI
+│
+└── demo/                            # 데모 자료
+    ├── demo_260407.gif
+    ├── example.png
+    ├── linking_guide.png
+    └── logo.png
+```
+
+---
+
+## 4. Data Flow
+
+### 4.1 데이터 수집 (Cron: 매일 22:30)
+
+```
+Portal Logs (테스트 완료)
+    │
+    ▼
+checkpoint_update (cron)
+    │
+    ├── verdict.log 파싱 → KPI name/value/range/result 추출
+    ├── 빌드별 디렉토리에 저장 (Checkpoint_History/TC/Build/)
+    ├── component version 파싱 → _build_info/Build.json
+    └── Copylog 수집 (상세 로그 요약)
+```
+
+### 4.2 일일 분석 (Cron: 매일 01:30)
+
+```
+ci_daily_cron.py
+    │
+    ├── CI TC 결과 수집 (최근 N빌드)
+    ├── 연속 실패 감지 (Application Fail)
+    ├── 노드 특이 실패 감지 (Node-Specific Fail)
+    ├── KPI 범위 초과 감지
+    └── 메일/리포트 생성
+```
+
+### 4.3 MCP Tool 호출 흐름 (AI Agent)
+
+```
+User: "TC37543.6.4.9에서 최근 빌드 CPU 변화 보여줘"
+    │
+    ▼
+AI Agent → MCP Tool: compare_checkpoints(tc, build1, build2)
+    │
+    ├── Checkpoint_History에서 두 빌드 데이터 로드
+    ├── _build_info에서 component version diff
+    ├── KPI delta 계산
+    └── 포맷팅된 비교 결과 반환 → AI Agent → User
+```
+
+---
+
+## 5. Core Algorithms
+
+### 5.1 KPI Anomaly Detection (Rule-based)
+
+```python
+# 의사 코드
+def check_kpi_anomaly(kpi_name, current_value, history_values):
+    rule = get_rule(kpi_name)  # tunning_rule에서 규칙 로드
+    
+    if rule.type == "absolute":
+        # CPU 계열: ±2 절대값
+        range_min = min(history_values) - rule.margin
+        range_max = max(history_values) + rule.margin
+        
+    elif rule.type == "relative_percent":
+        # Memory 계열: ±2%
+        baseline = mean(history_values)
+        range_min = baseline * (1 - rule.margin_pct)
+        range_max = baseline * (1 + rule.margin_pct)
+        
+    elif rule.type == "ratio":
+        # Packet Loss: 특수 공식
+        # (loss_total * 5) / dallas_sent_total
+        pass
+    
+    if current_value < range_min:
+        return "IMPROVEMENT"  # ← 이것도 anomaly로 분류
+    elif current_value > range_max:
+        return "DEGRADATION"
+    else:
+        return "NORMAL"
+```
+
+### KPI 카테고리별 규칙
+
+| 카테고리 | Margin | 방식 | 예시 KPI |
+|----------|--------|------|----------|
+| CPU | ±2 (절대) | absolute | background_cpu, egress_cpu |
+| Memory (Private) | ±2% | relative | shmem_avg, sysmon_mem |
+| Memory (UPP) | ±5% | relative | upp_mem_avg (jemalloc 고려) |
+| Throughput | ±2% | relative | total_pps, capacity_Gbps |
+| Session | ±1% | relative | PFCP_sessions |
+| Packet Loss | 특수 공식 | ratio | E2E loss, UPF loss |
+
+### 5.2 Auto Tuning Algorithm
+
+```python
+def auto_tune_kpi(tc, kpi_name):
+    # 1. 최근 3빌드에서 해당 KPI 값 수집
+    recent_values = get_last_n_values(tc, kpi_name, n=3)
+    
+    # 2. 평균 계산
+    baseline = mean(recent_values)
+    
+    # 3. 카테고리별 규칙 적용
+    rule = get_rule(kpi_name)
+    if rule.type == "absolute":
+        new_min = baseline - rule.margin
+        new_max = baseline + rule.margin
+    elif rule.type == "relative_percent":
+        new_min = baseline * (1 - rule.margin_pct)
+        new_max = baseline * (1 + rule.margin_pct)
+    
+    # 4. Verdict checkpoint 파일 업데이트
+    update_checkpoint_range(tc, kpi_name, new_min, new_max)
+    
+    # 5. verdict-analyze 실행하여 검증
+    run_verdict_analyze(tc)
+    
+    return {
+        "kpi": kpi_name,
+        "old_range": get_current_range(tc, kpi_name),
+        "new_range": (new_min, new_max),
+        "based_on": recent_values
+    }
+```
+
+### 5.3 CI Failure Classification
+
+```python
+def classify_failure(tc, build, node, checkpoint):
+    """
+    실패 원인 분류:
+    1. Node-Specific: 같은 빌드에서 특정 노드만 실패
+    2. Build-Specific: 같은 빌드에서 모든 노드 실패 → SW 결함
+    3. Intermittent: 간헐적 → 환경/타이밍 이슈
+    """
+    
+    # 같은 빌드, 다른 노드 결과 확인
+    same_build_results = get_results(tc, build, all_nodes=True)
+    
+    # 같은 노드, 다른 빌드 결과 확인
+    same_node_results = get_results(tc, all_builds=True, node=node)
+    
+    if all_fail(same_build_results):
+        # 모든 노드에서 실패 → SW 결함 가능성 높음
+        return "BUILD_ISSUE", "PCTR"
+        
+    elif only_this_node_fails(same_build_results, node):
+        # 이 노드만 실패 → 노드 HW 문제
+        if is_consecutive(same_node_results, threshold=3):
+            return "NODE_ISSUE", "PCGW"
+        else:
+            return "INTERMITTENT", "MONITOR"
+            
+    else:
+        return "UNKNOWN", "INVESTIGATE"
+```
+
+### 5.4 Component Version Diff
+
+```python
+def compare_component_versions(build1, build2):
+    """
+    두 빌드 간 component version 변경 추적
+    → KPI 변화의 원인 commit 범위를 좁히는 데 사용
+    """
+    info1 = load_build_info(build1)  # _build_info/Build1.json
+    info2 = load_build_info(build2)
+    
+    changes = {}
+    tracked_components = [
+        "PC UP Common Base",
+        "PC UP Data Plane",
+        "PC UP PFCP Endpoint",
+        "Timer Wheel",
+        "Key Value Database RD Replicator",
+        "IPOS SDK", "CBOS", "DPI APR",
+        # ... 20+ components
+    ]
+    
+    for comp in tracked_components:
+        v1 = info1.get(comp)
+        v2 = info2.get(comp)
+        if v1 != v2:
+            changes[comp] = {"from": v1, "to": v2}
+    
+    return changes
+```
+
+---
+
+## 6. MCP Server Interface Design
+
+### 설계 철학
+- AI agent가 자연어 질의를 tool 호출로 변환할 수 있도록 명확한 tool 이름과 설명
+- 최소한의 파라미터로 최대 정보 반환
+- 빌드명 부분 매칭 지원 (사용자가 전체 빌드명을 외우지 않아도 됨)
+
+### Tool 목록 (20+)
+
+| 카테고리 | Tool | 설명 |
+|----------|------|------|
+| **조회** | list_checkpoint_tcs() | 모니터링 대상 TC 목록 |
+| | list_checkpoint_builds(tc) | TC의 빌드 이력 |
+| | get_checkpoint(tc, build, last_n) | KPI 값 조회 |
+| **비교** | compare_checkpoints(tc, build1, build2) | 빌드 간 비교 + version diff |
+| **탐지** | search_checkpoint_failures(tc, last_n) | FAIL 체크포인트 검색 |
+| | check_kpi_range(tc, build, last_n) | 범위 초과 여부 |
+| **튜닝** | auto_tune_kpi(tc, kpi) | 자동 threshold 조정 |
+| **CI** | get_ci_tc_status(tc, last_n) | CI TC 상태 분석 |
+| | ci_daily_summary() | 일일 CI 요약 |
+| **로그** | get_source_log(tc, build, date, source) | 원본 로그 경로 해석 |
+| | run_copylog(logpath) | 로그 아카이빙 실행 |
+| **외부연동** | search_jira(jql, max) | Jira 이슈 검색 |
+| | search_gerrit(message, author, ...) | Gerrit 리뷰 검색 |
+| | get_review(url) | 리뷰 상세 |
+| | get_review_files(url) | 변경 파일 목록 |
+| **검색** | search_command(query) | 운영 명령어 검색 |
+
+---
+
+## 7. Deployment
+
+### Docker 기반 배포
+
+```
+┌─────────────────────────────────┐
+│  Docker Container               │
+│  (piera-kpi-monitor)            │
+│                                 │
+│  Streamlit App (:8501)          │
+│  ├── Dashboard UI               │
+│  ├── KPI Charts                 │
+│  └── Search / Diff              │
+│                                 │
+│  Data (volume mount):           │
+│  ├── Checkpoint_History/        │
+│  └── Copylog/                   │
+└─────────────────┬───────────────┘
+                  │ :8502 (host port)
+                  ▼
+              Web Browser
+```
+
+### Cron Schedule
+
+| 시간 | Job | 설명 |
+|------|-----|------|
+| 22:30 | checkpoint_update | 당일 테스트 결과 수집 |
+| 01:30 | check_kpi_monitor | 컨테이너 상태 확인 & 재시작 |
+| 05:00 | ci_daily_cron | 일일 CI 요약 생성 & 메일 |
+
+---
+
+## 8. Semantic Search (KPI Encyclopedia)
+
+### 구조
+```
+User: "메모리 누수 관련 체크포인트가 뭐가 있지?"
+    │
+    ▼
+ai_kpi_search.py
+    │
+    ├── 쿼리 임베딩 (ONNX model: sentence-transformers)
+    ├── FAISS 인덱스 검색 (kpi.index)
+    ├── 상위 K개 결과 반환
+    └── kpi_encyclopedia/*.md에서 상세 설명 로드
+```
+
+### 데이터 구조
+- `kpi_meta.json`: KPI 이름 → 설명, TC 매핑, 카테고리
+- `kpi.index`: 벡터 인덱스 (50+ KPI 임베딩)
+- `model_onnx/`: all-MiniLM-L6-v2 ONNX 변환 모델
+- `kpi_encyclopedia/*.md`: 각 KPI별 상세 분석 가이드 (원인, 조치, 이력)
+
+---
+
+## 9. Decision Tree: Anomaly Classification
+
+```
+KPI 변화 감지됨
+    │
+    ├── Degradation (값 증가/감소 방향이 나쁜 쪽)
+    │   ├── 모든 노드에서 발생? → SW 결함 가능성 → PCTR
+    │   ├── 특정 노드만? → 노드 문제 → PCGW
+    │   └── 간헐적? → 모니터링 지속
+    │
+    └── Improvement (값이 "좋아진" 방향)
+        ├── Component version 변경 있음?
+        │   ├── 의도된 최적화 commit 있음? → Tune range
+        │   └── 없음? → 기능 오작동 가능성 → PCTR
+        └── Version 변경 없음? → 환경 변화 확인
+```
+
+---
+
+## 10. Tech Stack
+
+| 레이어 | 기술 |
+|--------|------|
+| Language | Python 3.9+ |
+| UI | Streamlit |
+| AI Agent 연동 | MCP (Model Context Protocol) |
+| Semantic Search | Sentence Transformers + FAISS (ONNX) |
+| Data Store | File-based (JSON, TXT, structured directories) |
+| Deployment | Docker |
+| Scheduling | Cron |
+| External APIs | Jira REST API, Gerrit REST API |
+| Package Management | Hatch (pyproject.toml) |
+
+---
+
+## 11. Key Design Decisions
+
+| 결정 | 이유 |
+|------|------|
+| File-based storage (DB 없음) | 인프라 의존성 최소화, git으로 이력 관리 가능 |
+| MCP 프로토콜 채택 | AI agent가 직접 tool을 호출하여 분석 → 사람의 질의를 자동 처리 |
+| Rule-based 탐지 우선 | 데이터 양 제한적, false positive 최소화 우선 |
+| 단일 파일 MCP 서버 (60KB) | 빠른 개발, 배포 단순화 (trade-off: 유지보수성) |
+| ONNX 모델 | GPU 불필요, 경량 서버에서 inference 가능 |
+| Cron 기반 수집 | 실시간 불필요 (테스트는 수시간 소요), 단순 안정적 |
+
+---
+
+## 12. Future Extension (ML 확장 방향)
+
+| 현재 (Rule-based) | 확장 (ML) |
+|-------------------|-----------|
+| 고정 threshold (±2, ±2%) | 적응형 threshold (이동 분산 기반) |
+| 단일 KPI 독립 판단 | 다변량 이상 탐지 (KPI 간 상관관계) |
+| 수동 분류 (PCTR/PCGW) | 자동 분류 모델 (과거 TR 학습) |
+| Component version diff만 제공 | Commit → KPI 영향 예측 모델 |
+| Daily summary (텍스트) | 시각화 대시보드 + 예측 알림 |
+
+---
+
+## 13. Metrics & Impact
+
+- 모니터링 대상: 80+ Test Cases, 100+ KPIs per TC
+- 데이터 볼륨: ~1000 빌드 이력 (최근 1년)
+- 일일 수집량: 5~15 새 빌드 결과
+- 감지 속도: 수동 대비 12~24시간 단축 (다음날 아침 → 당일 밤 자동 수집)
+- False positive rate: Rule-based에서 ~5% 이하 (엄격한 margin 설정)

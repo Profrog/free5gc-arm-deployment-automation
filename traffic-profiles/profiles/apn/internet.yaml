@@ -1,0 +1,48 @@
+# internet.yaml — APN (DNN) 네트워크 정의
+#
+# free5GC 배포 기준: arm_k8s/free5gc/slices/slice1
+# 이 파일은 "어떤 파이프를 타는지"만 정의합니다.
+# 트래픽 패턴은 scenarios/ 에서 별도 정의.
+
+---
+dnn: "internet"
+
+# 네트워크 슬라이스
+slice:
+  sst: 1
+  sd: "000001"
+
+# PLMN
+plmn:
+  mcc: "001"
+  mnc: "01"
+
+# UPF 정보
+upf:
+  name: "UPF1"
+  node_id: "10.10.4.1"
+  n3_ip: "10.10.3.1"
+  n4_pfcp: "10.10.4.1"
+
+# SMF
+smf:
+  pfcp: "10.10.4.101"
+
+# UE IP Pool
+ue_pool:
+  cidr: "10.1.0.0/16"
+
+# QoS 기본값 (시나리오에서 override 가능)
+qos:
+  fiveqi: 9            # Non-GBR, best effort
+  priority: 9
+
+# gNB
+gnb:
+  n3_ip: "10.10.3.22"
+  ngap_ip: "10.10.2.22"
+
+# AMF
+amf:
+  ip: "10.10.2.107"
+  port: 38412

@@ -1,0 +1,31 @@
+# iot-burst.yaml — IoT 센서 버스트 트래픽 시나리오
+#
+# 사용: ./run.sh --apn apn/internet.yaml --scenario scenarios/iot-burst.yaml
+
+---
+metadata:
+  name: "IoT Sensor Burst"
+  description: "다수 IoT 센서의 주기적 소량 데이터 업로드 (30초마다 10패킷 burst)"
+  version: "1.0"
+
+traffic_pattern:
+  protocol: "udp"
+  direction: "uplink"
+  packet_size: 128
+  rate: "100pps"
+  duration: "300s"
+  burst:
+    enabled: true
+    packets: 10
+    interval: "30s"
+  jitter: "100ms"
+
+ue:
+  count: 20
+  imsi_start: "001010000000100"
+  ramp_up: "500ms"
+
+measurement:
+  metrics: [throughput, latency, packet_loss, jitter]
+  interval: "5s"
+  output: "results/iot_burst_result.json"

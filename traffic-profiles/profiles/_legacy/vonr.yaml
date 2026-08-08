@@ -1,0 +1,47 @@
+# vonr.yaml - Voice over NR 트래픽 프로파일
+# 시나리오: 실시간 음성통화 (AMR-WB 코덱 시뮬레이션)
+
+---
+apn: "ims"
+
+metadata:
+  name: "Voice over NR"
+  description: "VoNR 음성통화 시뮬레이션 (AMR-WB 23.85kbps, 20ms 프레임)"
+  version: "1.0"
+
+slice:
+  sst: 1
+  sd: "000001"
+
+qos:
+  fiveqi: 1          # GBR, Conversational Voice
+  priority: 2
+  mbr_uplink: "100Kbps"
+  mbr_downlink: "100Kbps"
+  gbr_uplink: "50Kbps"
+  gbr_downlink: "50Kbps"
+
+traffic_pattern:
+  protocol: "udp"
+  direction: "bidirectional"
+  packet_size: 80          # RTP 패킷 (AMR-WB frame + RTP/UDP/IP 오버헤드 제외 페이로드)
+  rate: "50pps"            # 20ms interval → 50 packets/sec
+  duration: "180s"         # 3분 통화
+  burst:
+    enabled: false
+    packets: 0
+    interval: ""
+  jitter: "2ms"            # 음성이므로 jitter 최소
+
+ue:
+  count: 10
+  imsi_start: "001010000000200"
+  ramp_up: "1s"
+
+measurement:
+  metrics:
+    - latency
+    - jitter
+    - packet_loss
+  interval: "1s"
+  output: "results/vonr_result.json"

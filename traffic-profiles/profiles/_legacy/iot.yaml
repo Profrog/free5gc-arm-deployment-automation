@@ -1,0 +1,48 @@
+# iot.yaml - IoT 센서 트래픽 프로파일
+# 시나리오: 수백 대의 센서가 주기적으로 소량 데이터 전송
+
+---
+apn: "iot"
+
+metadata:
+  name: "IoT Sensors"
+  description: "다수 IoT 센서의 주기적 소량 데이터 업로드 (온도/습도/위치)"
+  version: "1.0"
+
+slice:
+  sst: 1
+  sd: "000002"
+
+qos:
+  fiveqi: 8          # Non-GBR, delay tolerant
+  priority: 12
+  mbr_uplink: "1Mbps"
+  mbr_downlink: "1Mbps"
+  gbr_uplink: ""
+  gbr_downlink: ""
+
+traffic_pattern:
+  protocol: "udp"
+  direction: "uplink"
+  packet_size: 128         # 소량 센서 데이터
+  rate: "100pps"           # 초당 100패킷 (전체 UE 합산)
+  duration: "300s"
+  burst:
+    enabled: true
+    packets: 10            # 10패킷 한번에 전송
+    interval: "30s"        # 30초마다 burst
+  jitter: "100ms"
+
+ue:
+  count: 20
+  imsi_start: "001010000000100"
+  ramp_up: "500ms"
+
+measurement:
+  metrics:
+    - throughput
+    - latency
+    - packet_loss
+    - jitter
+  interval: "5s"
+  output: "results/iot_result.json"

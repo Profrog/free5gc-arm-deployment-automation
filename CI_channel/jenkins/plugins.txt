@@ -1,0 +1,29 @@
+# Gerrit integration
+gerrit-trigger:2.40.0
+gerrit-code-review:0.4.8
+
+# Pipeline
+workflow-aggregator:596.v8c21c963d92d
+pipeline-stage-view:2.34
+
+# Git
+git:5.2.2
+git-client:4.7.0
+
+# Docker
+docker-workflow:572.v950f58993843
+docker-plugin:1.6.2
+
+# Credentials
+credentials:1337.v60b_d7b_c7b_c9f
+credentials-binding:677.vdc9c38cb_15e0
+ssh-credentials:337.v395d2403ccd4
+
+# UI / Utility
+blueocean:1.27.14
+timestamper:1.27
+ansicolor:1.0.6
+ws-cleanup:0.46
+
+# Build tools
+golang:1.4

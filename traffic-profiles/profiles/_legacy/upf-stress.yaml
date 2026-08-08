@@ -1,0 +1,159 @@
+# upf-stress.yaml — UPF 데이터플레인 성능 검증 프로파일
+#
+# 참고:
+#   [1] Mishra & Pandey, "Kernel-Level Per-Slice UPF Latency Measurement
+#       in Containerised 5G Core Networks", arXiv:2605.28185, 2026.
+#       - eMBB slice: N3→N6 forwarding delay p99 = 574μs (light) ~ 1243μs (heavy)
+#       - 3 load conditions: light(10%), medium(50%), heavy(90%) of link capacity
+#       - 약 28M matched delay pairs 수집
+#
+#   [2] s5uishida, "Simple Measurement of UPF Performance", GitHub, 2023.
+#       - free5GC UPF v1.2.0: TCP 233Mbps, UDP 500Mbps → 382Mbps received (23% loss)
+#       - RTT: 0.786ms avg
+#       - 측정: PacketRusher 1 UE → iperf3 server (N6 side)
+#
+# 목적: free5GC UPF의 user-plane forwarding 성능 한계 측정
+#   - GTP-U 캡슐화/디캡슐화 처리량
+#   - 패킷 크기별 forwarding throughput 변화
+#   - 부하 증가 시 latency degradation 관측
+#   - packet loss 발생 임계점 확인
+
+---
+apn: "internet"
+
+metadata:
+  name: "UPF Stress Test — Slice 1 (internet)"
+  description: |
+    free5GC UPF1 데이터플레인 포워딩 성능 한계 측정.
+    [Phase 1] 소패킷(64B) 고빈도 → GTP-U encap/decap 오버헤드 측정
+    [Phase 2] 대패킷(1400B) 고대역폭 → forwarding throughput 상한 측정
+    [Phase 3] 점진적 부하 증가 → packet loss 임계점 탐색
+    [Phase 4] 양방향 동시 부하 → full-duplex 검증
+  version: "1.0"
+
+# ── free5GC 실제 구성 (arm_k8s/free5gc/slices/slice1 기준) ──
+# SMF1: 10.10.4.101 (PFCP) → UPF1: 10.10.4.1
+# UPF1 N3: 10.10.3.1, DNN: internet, UE pool: 10.1.0.0/16
+# gNB N3: 10.10.3.22, gNB NGAP(N2): 10.10.2.22 → AMF: 10.10.2.107
+# PLMN: 001/01, SST:1, SD:000001
+
+slice:
+  sst: 1
+  sd: "000001"
+
+qos:
+  fiveqi: 9            # Non-GBR, default internet (3GPP TS 23.501 Table 5.7.4-1)
+  priority: 9
+  mbr_uplink: "500Mbps"
+  mbr_downlink: "500Mbps"
+  gbr_uplink: ""
+  gbr_downlink: ""
+
+# ────────────────────────────────────────────────────────────
+# 멀티페이즈 테스트 (제네레이터가 phases 배열을 순차 실행)
+# ────────────────────────────────────────────────────────────
+phases:
+  # Phase 1: 소패킷 고빈도 — GTP-U 처리 오버헤드 측정
+  # 참고: [1]에서 eMBB p99 latency가 574→1243μs로 증가한 조건 재현
+  - name: "small_packet_flood"
+    description: "64B UDP 소패킷 flood → per-packet GTP-U encap/decap 비용 측정"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 64
+      rate: "100Mbps"        # 약 195Kpps (64B 기준)
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss, pps]
+      interval: "1s"
+
+  # Phase 2: 대패킷 최대 throughput — 라인레이트 한계 측정
+  # 참고: [2]에서 free5GC UPF의 TCP 233Mbps / UDP 수신 382Mbps 관측
+  - name: "large_packet_throughput"
+    description: "1400B UDP 대패킷 → UPF 최대 forwarding throughput 측정"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 1400
+      rate: "500Mbps"        # free5GC UPF 한계치 의도적 초과
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss]
+      interval: "1s"
+
+  # Phase 3: 점진적 부하 (stepped load) — loss 임계점 탐색
+  # 참고: [1]의 light(10%)/medium(50%)/heavy(90%) 3단계 접근 차용
+  - name: "stepped_load"
+    description: "50M→100M→200M→300M→400M→500M 단계별 부하 증가"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 1400
+      rate_steps:            # 각 단계 rate (duration은 step_duration 적용)
+        - "50Mbps"
+        - "100Mbps"
+        - "200Mbps"
+        - "300Mbps"
+        - "400Mbps"
+        - "500Mbps"
+      step_duration: "30s"   # 단계당 30초 유지
+      duration: "180s"       # 전체 = 6단계 × 30초
+    measurement:
+      metrics: [throughput, latency, packet_loss, jitter]
+      interval: "1s"
+
+  # Phase 4: 양방향 동시 부하 — full-duplex forwarding 검증
+  - name: "bidirectional_stress"
+    description: "UL/DL 동시 200Mbps → 양방향 GTP-U 동시 처리 성능"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "bidirectional"
+      packet_size: 1400
+      rate: "200Mbps"        # UL+DL 각각 200Mbps
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss, jitter]
+      interval: "1s"
+
+# ────────────────────────────────────────────────────────────
+# 단일 실행 시 (phases 미지원 제네레이터용 fallback)
+# Phase 2와 동일한 조건으로 실행
+# ────────────────────────────────────────────────────────────
+traffic_pattern:
+  protocol: "udp"
+  direction: "uplink"
+  packet_size: 1400
+  rate: "500Mbps"
+  duration: "60s"
+  burst:
+    enabled: false
+    packets: 0
+    interval: ""
+  jitter: "0ms"
+
+ue:
+  count: 1               # UPF 포워딩 자체 측정이므로 단일 UE로 충분
+  imsi_start: "001010000000001"
+  ramp_up: "0s"
+
+measurement:
+  metrics:
+    - throughput
+    - latency
+    - packet_loss
+    - jitter
+  interval: "1s"
+  output: "results/upf_stress_result.json"
+
+# ────────────────────────────────────────────────────────────
+# 예상 baseline (참고값)
+# free5GC go-upf on ARM64 (Raspberry Pi 4 class):
+#   TCP: ~80-150 Mbps
+#   UDP 500Mbps offered → ~150-250 Mbps received (40-50% loss 예상)
+#   RTT: 1-3ms
+#
+# x86 VM 2-core 환경 (s5uishida 벤치마크):
+#   TCP: 233 Mbps
+#   UDP 500Mbps offered → 382 Mbps received (23% loss)
+#   RTT: 0.786ms
+# ────────────────────────────────────────────────────────────

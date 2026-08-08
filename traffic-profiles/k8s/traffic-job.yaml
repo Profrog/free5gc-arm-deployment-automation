@@ -1,0 +1,171 @@
+# traffic-job.yaml
+# APN 프로파일 기반 트래픽 제네레이터 K8s Job
+#
+# 사용:
+#   1. 프로파일을 ConfigMap으로 생성:
+#      kubectl create configmap traffic-profile \
+#        --from-file=profile.yaml=profiles/internet.yaml -n free5gc
+#
+#   2. Job 실행:
+#      kubectl apply -f k8s/traffic-job.yaml -n free5gc
+#
+# 환경변수로 타겟 서버, TUN 인터페이스 등 설정 가능.
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: traffic-gen
+  namespace: free5gc
+  labels:
+    component: traffic-generator
+    app: free5gc-test
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        component: traffic-generator
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [{"name":"n3network","interface":"n3","ips":["10.10.3.100/24"]},
+           {"name":"n6network","interface":"n6","ips":["10.10.4.100/24"]}]
+    spec:
+      restartPolicy: Never
+
+      # UE Pod과 동일한 노드에서 실행 (선택적)
+      # affinity:
+      #   podAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       - labelSelector:
+      #           matchLabels:
+      #             component: ue
+      #         topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: traffic-gen
+          image: registry.local:5000/traffic-gen:latest
+          # 빌드: Dockerfile.traffic-gen 참고
+          imagePullPolicy: IfNotPresent
+
+          command: ["/bin/bash"]
+          args:
+            - "-c"
+            - |
+              echo "Waiting for uesimtun0..."
+              timeout=60
+              while [ $timeout -gt 0 ]; do
+                ip link show uesimtun0 &>/dev/null && break
+                sleep 2
+                timeout=$((timeout-2))
+              done
+
+              if ! ip link show uesimtun0 &>/dev/null; then
+                echo "ERROR: uesimtun0 not available. Running without TUN binding."
+                export TUN_IFACE="eth0"
+              fi
+
+              /opt/traffic-gen/traffic-gen.sh /etc/traffic-profile/profile.yaml
+
+          env:
+            - name: IPERF_SERVER
+              value: "iperf3-server.free5gc.svc.cluster.local"
+            - name: TUN_IFACE
+              value: "uesimtun0"
+            - name: RESULT_DIR
+              value: "/results"
+
+          volumeMounts:
+            - name: traffic-profile
+              mountPath: /etc/traffic-profile
+              readOnly: true
+            - name: generator-script
+              mountPath: /opt/traffic-gen
+              readOnly: true
+            - name: results
+              mountPath: /results
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN", "NET_RAW"]
+
+      volumes:
+        - name: traffic-profile
+          configMap:
+            name: traffic-profile
+        - name: generator-script
+          configMap:
+            name: traffic-gen-script
+            defaultMode: 0755
+        - name: results
+          emptyDir: {}
+
+---
+# iperf3 서버 (트래픽 수신용) — UPF 뒤 또는 N6 네트워크에 배치
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iperf3-server
+  namespace: free5gc
+  labels:
+    component: iperf3-server
+    app: free5gc-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: iperf3-server
+  template:
+    metadata:
+      labels:
+        component: iperf3-server
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [{"name":"n6network","interface":"n6","ips":["10.10.4.200/24"]}]
+    spec:
+      containers:
+        - name: iperf3
+          image: networkstatic/iperf3:latest
+          command: ["iperf3", "-s", "-p", "5201"]
+          ports:
+            - containerPort: 5201
+              protocol: TCP
+            - containerPort: 5201
+              protocol: UDP
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "1000m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iperf3-server
+  namespace: free5gc
+  labels:
+    component: iperf3-server
+spec:
+  selector:
+    component: iperf3-server
+  ports:
+    - name: iperf3-tcp
+      port: 5201
+      targetPort: 5201
+      protocol: TCP
+    - name: iperf3-udp
+      port: 5201
+      targetPort: 5201
+      protocol: UDP

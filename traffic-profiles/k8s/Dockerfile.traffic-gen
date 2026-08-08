@@ -1,0 +1,30 @@
+# Dockerfile.traffic-gen
+# 트래픽 제네레이터용 경량 ARM64 이미지
+# 빌드: docker build -t registry.local:5000/traffic-gen:latest -f Dockerfile.traffic-gen .
+
+FROM ubuntu:22.04
+
+ARG TARGETARCH=arm64
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iperf3 \
+    nmap \
+    iproute2 \
+    iputils-ping \
+    socat \
+    curl \
+    jq \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# yq 설치 (YAML 파서)
+RUN curl -sL "https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_${TARGETARCH}" \
+    -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
+
+# 스크립트 복사
+COPY generator/traffic-gen.sh /opt/traffic-gen/traffic-gen.sh
+RUN chmod +x /opt/traffic-gen/traffic-gen.sh
+
+WORKDIR /opt/traffic-gen
+
+ENTRYPOINT ["/bin/bash"]

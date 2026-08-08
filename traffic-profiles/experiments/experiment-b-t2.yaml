@@ -1,0 +1,24 @@
+# experiment-b-t2.yaml — macvlan 고정, 소규모 트래픽
+---
+metadata:
+  name: "B-T2: macvlan Fixed + Small Traffic"
+  matrix_id: "B-T2"
+
+nwdaf:
+  enabled: false
+
+cni:
+  initial: "macvlan"
+
+phases:
+  - name: "small_traffic"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 128
+      rate: "10Mbps"
+      duration: "120s"
+
+measurement:
+  monitor_interval: 5
+  repetitions: 5

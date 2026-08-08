@@ -1,0 +1,47 @@
+# internet.yaml - 일반 모바일 인터넷 트래픽 프로파일
+# 시나리오: 영상 스트리밍 + 웹 브라우징 혼합
+
+---
+apn: "internet"
+
+metadata:
+  name: "Mobile Internet"
+  description: "영상 스트리밍(1080p) + 웹 브라우징 혼합 트래픽"
+  version: "1.0"
+
+slice:
+  sst: 1
+  sd: "000001"
+
+qos:
+  fiveqi: 9          # Non-GBR, best effort
+  priority: 9
+  mbr_uplink: "50Mbps"
+  mbr_downlink: "100Mbps"
+  gbr_uplink: ""
+  gbr_downlink: ""
+
+traffic_pattern:
+  protocol: "tcp"
+  direction: "downlink"
+  packet_size: 1400       # MTU에 가까운 대용량 패킷
+  rate: "50Mbps"
+  duration: "120s"
+  burst:
+    enabled: false
+    packets: 0
+    interval: ""
+  jitter: "5ms"
+
+ue:
+  count: 5
+  imsi_start: "001010000000010"
+  ramp_up: "2s"
+
+measurement:
+  metrics:
+    - throughput
+    - latency
+    - packet_loss
+  interval: "1s"
+  output: "results/internet_result.json"

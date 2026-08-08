@@ -1,0 +1,47 @@
+# streaming.yaml — APN (DNN) 네트워크 정의
+#
+# free5GC 배포 기준: arm_k8s/free5gc/slices/slice2
+# Slice 2: 스트리밍 전용 슬라이스
+
+---
+dnn: "streaming"
+
+# 네트워크 슬라이스
+slice:
+  sst: 1
+  sd: "000002"
+
+# PLMN
+plmn:
+  mcc: "001"
+  mnc: "01"
+
+# UPF 정보
+upf:
+  name: "UPF2"
+  node_id: "10.10.4.2"
+  n3_ip: "10.10.3.2"
+  n4_pfcp: "10.10.4.2"
+
+# SMF
+smf:
+  pfcp: "10.10.4.102"
+
+# UE IP Pool
+ue_pool:
+  cidr: "10.2.0.0/16"
+
+# QoS 기본값
+qos:
+  fiveqi: 8            # Non-GBR, video streaming
+  priority: 8
+
+# gNB
+gnb:
+  n3_ip: "10.10.3.22"
+  ngap_ip: "10.10.2.22"
+
+# AMF
+amf:
+  ip: "10.10.2.107"
+  port: 38412

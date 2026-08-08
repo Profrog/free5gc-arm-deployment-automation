@@ -1,0 +1,14 @@
+[Unit]
+Description=free5gc UPF Monitor Dashboard (Streamlit)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/free5gc-k8s-arm/traffic-profiles/monitor
+ExecStart=/home/ubuntu/.local/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

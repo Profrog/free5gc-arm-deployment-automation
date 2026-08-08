@@ -1,0 +1,24 @@
+# experiment-b-t1.yaml — macvlan 고정, 대규모 트래픽
+---
+metadata:
+  name: "B-T1: macvlan Fixed + Large Traffic"
+  matrix_id: "B-T1"
+
+nwdaf:
+  enabled: false
+
+cni:
+  initial: "macvlan"
+
+phases:
+  - name: "large_traffic"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "500Mbps"
+      duration: "120s"
+
+measurement:
+  monitor_interval: 5
+  repetitions: 5

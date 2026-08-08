@@ -1,0 +1,43 @@
+# experiment-c-t3.yaml — NWDAF 동적 전환, 소규모→대규모 트래픽 (핵심 실험)
+#
+# 사용: ./run.sh --experiment experiments/experiment-c-t3.yaml
+---
+metadata:
+  name: "C-T3: NWDAF Dynamic Switching (Small → Large)"
+  matrix_id: "C-T3"
+
+nwdaf:
+  enabled: true
+  wait_ready: true
+
+cni:
+  initial: "ipvlan"
+
+phases:
+  - name: "small_traffic"
+    description: "소패킷 고빈도 (mMTC) — ipvlan 적합"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 128
+      rate: "10Mbps"
+      duration: "120s"
+    expected_cni: "ipvlan"
+
+  - name: "large_traffic"
+    description: "대패킷 고throughput (eMBB) — macvlan 적합"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "500Mbps"
+      duration: "120s"
+    expected_cni: "macvlan"
+
+measurement:
+  monitor_interval: 5
+  repetitions: 5
+
+validation:
+  switch_expected: true
+  switch_direction: "ipvlan → macvlan"

@@ -1,0 +1,100 @@
+# upf-stress.yaml — UPF 데이터플레인 성능 한계 측정 시나리오
+#
+# 사용: ./run.sh --apn apn/internet.yaml --scenario scenarios/upf-stress.yaml
+#
+# APN 정보는 별도 apn/*.yaml에서 주입됩니다.
+# 이 파일은 "어떤 패턴으로 트래픽을 흘릴지"만 정의합니다.
+
+---
+metadata:
+  name: "UPF Stress Test"
+  description: |
+    UPF 데이터플레인 포워딩 성능 한계 측정 (4 Phase).
+    Phase 1: 소패킷 flood → GTP-U encap/decap 오버헤드
+    Phase 2: 대패킷 max throughput
+    Phase 3: stepped load → loss 임계점
+    Phase 4: 양방향 동시 부하
+  version: "1.0"
+
+# QoS override (apn 기본값 덮어쓰기 — 필요 시)
+# qos:
+#   fiveqi: 9
+#   mbr_uplink: "500Mbps"
+#   mbr_downlink: "500Mbps"
+
+phases:
+  - name: "small_packet_flood"
+    description: "64B UDP 소패킷 flood → per-packet GTP-U encap/decap 비용 측정"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 64
+      rate: "100Mbps"
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss, pps]
+      interval: "1s"
+
+  - name: "large_packet_throughput"
+    description: "1400B UDP 대패킷 → UPF 최대 forwarding throughput"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 1400
+      rate: "500Mbps"
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss]
+      interval: "1s"
+
+  - name: "stepped_load"
+    description: "50M→100M→200M→300M→400M→500M 단계별 부하 증가"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "uplink"
+      packet_size: 1400
+      rate_steps:
+        - "50Mbps"
+        - "100Mbps"
+        - "200Mbps"
+        - "300Mbps"
+        - "400Mbps"
+        - "500Mbps"
+      step_duration: "30s"
+      duration: "180s"
+    measurement:
+      metrics: [throughput, latency, packet_loss, jitter]
+      interval: "1s"
+
+  - name: "bidirectional_stress"
+    description: "UL/DL 동시 200Mbps → 양방향 GTP-U 동시 처리"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "bidirectional"
+      packet_size: 1400
+      rate: "200Mbps"
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss, jitter]
+      interval: "1s"
+
+# fallback (phases 미지원 제네레이터용)
+traffic_pattern:
+  protocol: "udp"
+  direction: "uplink"
+  packet_size: 1400
+  rate: "500Mbps"
+  duration: "60s"
+  burst:
+    enabled: false
+  jitter: "0ms"
+
+ue:
+  count: 1
+  imsi_start: "001010000000001"
+  ramp_up: "0s"
+
+measurement:
+  metrics: [throughput, latency, packet_loss, jitter]
+  interval: "1s"
+  output: "results/upf_stress_result.json"

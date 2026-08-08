@@ -1,0 +1,24 @@
+# experiment-a-t1.yaml — ipvlan 고정, 대규모 트래픽
+---
+metadata:
+  name: "A-T1: ipvlan Fixed + Large Traffic"
+  matrix_id: "A-T1"
+
+nwdaf:
+  enabled: false
+
+cni:
+  initial: "ipvlan"
+
+phases:
+  - name: "large_traffic"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "500Mbps"
+      duration: "120s"
+
+measurement:
+  monitor_interval: 5
+  repetitions: 5

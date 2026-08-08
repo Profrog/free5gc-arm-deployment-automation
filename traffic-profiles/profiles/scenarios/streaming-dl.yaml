@@ -1,0 +1,73 @@
+# streaming-dl.yaml — 스트리밍 다운링크 부하 시나리오
+#
+# 사용: ./run.sh --apn apn/streaming.yaml --scenario scenarios/streaming-dl.yaml
+
+---
+metadata:
+  name: "Streaming DL Stress"
+  description: "DL 위주 대용량 스트리밍 트래픽. 4K 영상 다수 세션 시뮬레이션."
+  version: "1.0"
+
+phases:
+  - name: "dl_throughput_max"
+    description: "1400B UDP DL 500Mbps → UPF2 downlink 최대 throughput"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "500Mbps"
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss]
+      interval: "1s"
+
+  - name: "realistic_4k"
+    description: "TCP DL 100Mbps → 4K 스트림 4세션 동시"
+    traffic_pattern:
+      protocol: "tcp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "100Mbps"
+      duration: "120s"
+    measurement:
+      metrics: [throughput, latency, jitter]
+      interval: "1s"
+
+  - name: "stepped_dl"
+    description: "50M→100M→200M→300M→400M DL 단계별"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate_steps:
+        - "50Mbps"
+        - "100Mbps"
+        - "200Mbps"
+        - "300Mbps"
+        - "400Mbps"
+      step_duration: "30s"
+      duration: "150s"
+    measurement:
+      metrics: [throughput, latency, packet_loss, jitter]
+      interval: "1s"
+
+# fallback
+traffic_pattern:
+  protocol: "udp"
+  direction: "downlink"
+  packet_size: 1400
+  rate: "500Mbps"
+  duration: "60s"
+  burst:
+    enabled: false
+  jitter: "0ms"
+
+ue:
+  count: 1
+  imsi_start: "001010000000002"
+  ramp_up: "0s"
+
+measurement:
+  metrics: [throughput, latency, packet_loss, jitter]
+  interval: "1s"
+  output: "results/streaming_dl_result.json"

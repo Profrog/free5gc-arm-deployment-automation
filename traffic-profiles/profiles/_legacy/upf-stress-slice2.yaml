@@ -1,0 +1,106 @@
+# upf-stress-slice2.yaml — UPF2 데이터플레인 검증 (Slice 2: streaming)
+#
+# free5GC 실제 구성 (arm_k8s/free5gc/slices/slice2 기준):
+#   SMF2: 10.10.4.102 (PFCP) → UPF2: 10.10.4.2
+#   UPF2 N3: 10.10.3.2, DNN: streaming, UE pool: 10.2.0.0/16
+#   PLMN: 001/01, SST:1, SD:000002
+#
+# 목적: 스트리밍 슬라이스의 UPF forwarding 성능 측정
+#   - 대용량 다운링크 위주 (영상 스트리밍 시뮬레이션)
+#   - UPF1과의 슬라이스 간 격리(isolation) 검증 가능
+
+---
+apn: "streaming"
+
+metadata:
+  name: "UPF Stress Test — Slice 2 (streaming)"
+  description: |
+    free5GC UPF2 데이터플레인 성능 측정.
+    DL 위주 대용량 트래픽으로 스트리밍 슬라이스 UPF 포워딩 한계 확인.
+    Slice 1(internet)과 동시 실행하면 inter-slice isolation 검증 가능.
+  version: "1.0"
+
+slice:
+  sst: 1
+  sd: "000002"
+
+qos:
+  fiveqi: 8            # Non-GBR, video streaming 용도
+  priority: 8
+  mbr_uplink: "50Mbps"
+  mbr_downlink: "500Mbps"
+  gbr_uplink: ""
+  gbr_downlink: ""
+
+phases:
+  # Phase 1: DL throughput 최대치 — 스트리밍 시나리오
+  - name: "dl_throughput_max"
+    description: "1400B UDP DL → UPF2 downlink forwarding 최대 throughput"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "500Mbps"
+      duration: "60s"
+    measurement:
+      metrics: [throughput, latency, packet_loss]
+      interval: "1s"
+
+  # Phase 2: 현실적 스트리밍 부하 (4K 25Mbps × 여러 세션 시뮬레이션)
+  - name: "realistic_streaming"
+    description: "1400B UDP DL 100Mbps → 4K 스트림 4세션 동시 시뮬레이션"
+    traffic_pattern:
+      protocol: "tcp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "100Mbps"
+      duration: "120s"
+    measurement:
+      metrics: [throughput, latency, jitter]
+      interval: "1s"
+
+  # Phase 3: stepped DL load
+  - name: "stepped_dl_load"
+    description: "50M→100M→200M→300M→400M DL 단계별 부하"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate_steps:
+        - "50Mbps"
+        - "100Mbps"
+        - "200Mbps"
+        - "300Mbps"
+        - "400Mbps"
+      step_duration: "30s"
+      duration: "150s"
+    measurement:
+      metrics: [throughput, latency, packet_loss, jitter]
+      interval: "1s"
+
+# fallback (단일 실행)
+traffic_pattern:
+  protocol: "udp"
+  direction: "downlink"
+  packet_size: 1400
+  rate: "500Mbps"
+  duration: "60s"
+  burst:
+    enabled: false
+    packets: 0
+    interval: ""
+  jitter: "0ms"
+
+ue:
+  count: 1
+  imsi_start: "001010000000002"
+  ramp_up: "0s"
+
+measurement:
+  metrics:
+    - throughput
+    - latency
+    - packet_loss
+    - jitter
+  interval: "1s"
+  output: "results/upf_stress_slice2_result.json"

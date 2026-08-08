@@ -1001,3 +1001,69 @@ ML:
   → "slope +20이면 30초 후 160Mbps, loss 급증 예상" → 지금 전환
   → 30초 후 throughput=200이지만 이미 macvlan → loss 0.5% 유지
 ```
+
+---
+
+## [20] 전환 비용(Switching Cost) 분석 프레임워크
+
+### 문제: 전환이 무중단이 아닐 수 있음
+
+DRANET이 ipvlan→macvlan 전환 시:
+- 같은 IP 유지 (동일 subnet, ResourceClaim 설정)
+- 그러나 인터페이스 재구성 순간 일시적 패킷 지연/손실 가능
+
+### 전환 비용 정량화
+
+```
+전환 이득(Gain):
+  macvlan 전환 후 throughput 향상 × 남은 실험 시간
+  = (310Mbps - 250Mbps) × remaining_seconds = Δthroughput × T_remaining
+
+전환 비용(Cost):
+  전환 중 손실된 패킷량
+  = packet_rate × switching_duration × loss_ratio_during_switch
+
+전환 판단 기준:
+  Gain > Cost → 전환 O
+  Gain < Cost → 전환 X (현재 인터페이스 유지가 나음)
+```
+
+### 측정 항목
+
+| 메트릭 | 측정 방법 | 의미 |
+|--------|----------|------|
+| switching_duration | 전환 명령 → throughput 복귀까지 시간 | 전환에 걸리는 시간 |
+| packets_lost_during_switch | 전환 구간의 drop 수 | 직접적 손실 |
+| throughput_dip | 전환 중 최저 throughput | 서비스 영향도 |
+| recovery_time | dip → 정상 수준 복귀 시간 | 안정화 시간 |
+
+### 설계 결정: 같은 IP 유지
+
+```
+ResourceClaim 설정:
+  ipvlan:  IP 10.10.3.1/24 on net-ipvlan DeviceClass
+  macvlan: IP 10.10.3.1/24 on net-macvlan DeviceClass
+           ↑ 동일 — GTP-U 터널/PFCP 세션 유지
+
+IP가 바뀌면: PFCP 세션 재수립 필요 → 수 초 중단 → 비용 너무 큼
+IP 유지하면: 드라이버만 교체 → 최소 중단
+```
+
+### 논문에서의 서술
+
+> "전환 비용은 switching_duration × packet_rate × loss_ratio로 정량화하며, 전환 이득(Δthroughput × T_remaining)과 비교하여 NWDAF의 전환 판단이 net-positive인지를 평가한다. ResourceClaim 설정에서 전환 전후 동일 IP를 유지하여 GTP-U 터널 및 PFCP 세션의 재수립을 방지하고, 전환 비용을 인터페이스 드라이버 교체 시간으로 한정한다."
+
+### NWDAF 판단에 반영 (향후)
+
+전환 비용이 측정되면, NWDAF의 전환 판단에 cost-benefit 로직 추가 가능:
+```python
+# 전환 판단 강화
+estimated_gain = delta_throughput * estimated_remaining_time
+estimated_cost = measured_switching_duration * current_packet_rate
+if estimated_gain > estimated_cost * SAFETY_MARGIN:
+    switch()
+else:
+    hold()  # 이득이 비용보다 작으면 전환 안 함
+```
+
+이는 현재 구현의 confidence threshold + cooldown과 함께 동작하여, 불필요한 전환을 추가로 방지.

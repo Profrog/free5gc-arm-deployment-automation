@@ -1,10 +1,20 @@
-# experiment-c-t3.yaml — NWDAF 동적 전환, 소규모→대규모 트래픽 (핵심 실험)
+# experiment-c-t3.yaml — NWDAF 동적 전환, 점진적 트래픽 증가 (핵심 실험)
+#
+# 핵심 의도:
+#   트래픽이 점진적으로 증가할 때, ML 모델이 "미리" 전환을 결정할 수 있는가?
+#   Rule-based(threshold 초과 시 반응)와 달리, ML은 추세(trend)를 보고
+#   packet loss가 발생하기 전에 예측적으로(predictive) 전환한다.
 #
 # 사용: ./run.sh --experiment experiments/experiment-c-t3.yaml
 ---
 metadata:
-  name: "C-T3: NWDAF Dynamic Switching (Small → Large)"
+  name: "C-T3: NWDAF Predictive Switching (Gradual Ramp-up)"
   matrix_id: "C-T3"
+  description: |
+    트래픽이 10Mbps에서 300Mbps까지 점진적으로 증가.
+    ML 모델은 throughput 추세를 분석하여, 아직 병목이 발생하지 않은 시점에
+    "이 추세라면 곧 ipvlan에서 loss가 발생할 것"을 예측하고 미리 macvlan로 전환.
+    Rule-based는 threshold(e.g. loss>5%) 도달 후에야 반응하므로 이미 손실 발생.
 
 nwdaf:
   enabled: true
@@ -14,24 +24,43 @@ cni:
   initial: "ipvlan"
 
 phases:
-  - name: "small_traffic"
-    description: "소패킷 고빈도 (mMTC) — ipvlan 적합"
-    traffic_pattern:
-      protocol: "udp"
-      direction: "uplink"
-      packet_size: 128
-      rate: "10Mbps"
-      duration: "120s"
-    expected_cni: "ipvlan"
-
-  - name: "large_traffic"
-    description: "대패킷 고throughput (eMBB) — macvlan 적합"
+  - name: "steady_low"
+    description: "안정 구간 — ipvlan 적합, 전환 불필요"
     traffic_pattern:
       protocol: "udp"
       direction: "downlink"
       packet_size: 1400
-      rate: "500Mbps"
-      duration: "120s"
+      rate: "10Mbps"
+      duration: "60s"
+    expected_cni: "ipvlan"
+
+  - name: "gradual_ramp"
+    description: "점진적 증가 — ML이 추세를 감지하고 '미리' 전환해야 하는 구간"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate_steps:
+        - "30Mbps"
+        - "60Mbps"
+        - "100Mbps"
+        - "150Mbps"
+        - "200Mbps"
+        - "300Mbps"
+      step_duration: "30s"
+      duration: "180s"
+    expected_cni: "macvlan"
+    # ML은 100~150Mbps 구간에서 이미 전환 결정 (loss 발생 전)
+    # Rule-based는 200Mbps+ 에서 loss 발생 후 반응
+
+  - name: "steady_high"
+    description: "전환 완료 후 안정 구간 — macvlan로 안정적 처리 확인"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "300Mbps"
+      duration: "60s"
     expected_cni: "macvlan"
 
 measurement:
@@ -41,3 +70,9 @@ measurement:
 validation:
   switch_expected: true
   switch_direction: "ipvlan → macvlan"
+  # 핵심 검증: 전환 시점이 loss 발생 시점보다 앞서는가?
+  predictive_switch: true
+  comparison_vs_rule_based: |
+    Rule-based: loss > 5% 시점에서 전환 (reactive)
+    ML: loss 발생 전 전환 (predictive)
+    검증 메트릭: 전환 시점의 cumulative packet loss 비교

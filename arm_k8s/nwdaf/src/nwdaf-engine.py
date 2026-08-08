@@ -442,11 +442,16 @@ class NWDAFEngine:
         self.interval = args.interval
         self.window_size = args.window
         self.dry_run = args.dry_run
+        self.mode = args.mode
 
         self.collector = KPICollector()
         self.classifier = CNIClassifier(Path(args.model))
         self.executor = DRANETExecutor(dry_run=args.dry_run)
         self.logger = NWDAFLogger()
+
+        # rule-based 모드면 ML 모델 강제 비활성화
+        if self.mode == "rule-based":
+            self.classifier.model = None
 
         # 상태
         self.sample_buffer = []
@@ -461,7 +466,8 @@ class NWDAFEngine:
         print("═══════════════════════════════════════")
         print(f"  Interval:    {self.interval}s")
         print(f"  Window:      {self.window_size} samples")
-        print(f"  Model:       {'ML' if self.classifier.model else 'Rule-based'}")
+        print(f"  Mode:        {self.mode}")
+        print(f"  Model:       {'ML (predictive)' if self.classifier.model else 'Rule-based (reactive)'}")
         print(f"  Dry-run:     {self.dry_run}")
         print(f"  Current CNI: {self.executor.get_current_backend()}")
         print(f"  Log:         {self.logger.log_file}")
@@ -574,6 +580,8 @@ def parse_args():
                         help="판단에 사용할 샘플 윈도우 크기 (default: 5)")
     parser.add_argument("--model", type=str, default=str(DEFAULT_MODEL_PATH),
                         help="학습된 모델 경로 (default: model/nwdaf-classifier.pkl)")
+    parser.add_argument("--mode", type=str, default="ml", choices=["ml", "rule-based"],
+                        help="판단 모드: ml (ML 모델, predictive) 또는 rule-based (threshold, reactive)")
     parser.add_argument("--dry-run", action="store_true",
                         help="전환 실행 안 함 (판단만)")
     return parser.parse_args()

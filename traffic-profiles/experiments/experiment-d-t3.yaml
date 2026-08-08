@@ -1,0 +1,68 @@
+# experiment-d-t3.yaml — Rule-based 전환, 점진적 트래픽 증가 (ML 비교 대상)
+#
+# ML(C-T3)과의 비교를 위한 rule-based 실험.
+# NWDAF 엔진을 rule-based fallback 모드로 실행하여
+# "threshold 넘으면 반응(reactive)"하는 방식의 한계를 보여줌.
+#
+# 사용: ./run.sh --experiment experiments/experiment-d-t3.yaml
+---
+metadata:
+  name: "D-T3: Rule-based Reactive Switching (Gradual Ramp-up)"
+  matrix_id: "D-T3"
+  description: |
+    C-T3과 동일한 트래픽 패턴에서 rule-based 전환.
+    ML 모델 없이 threshold(loss>5% 또는 throughput>100Mbps)로만 판단.
+    C-T3 대비 전환 시점이 늦고, 그 사이 packet loss가 누적됨을 보여줌.
+
+nwdaf:
+  enabled: true
+  wait_ready: true
+  mode: "rule-based"    # ML 모델 비활성화, rule-based fallback만 사용
+
+cni:
+  initial: "ipvlan"
+
+phases:
+  - name: "steady_low"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "10Mbps"
+      duration: "60s"
+
+  - name: "gradual_ramp"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate_steps:
+        - "30Mbps"
+        - "60Mbps"
+        - "100Mbps"
+        - "150Mbps"
+        - "200Mbps"
+        - "300Mbps"
+      step_duration: "30s"
+      duration: "180s"
+
+  - name: "steady_high"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "300Mbps"
+      duration: "60s"
+
+measurement:
+  monitor_interval: 5
+  repetitions: 5
+
+validation:
+  switch_expected: true
+  switch_direction: "ipvlan → macvlan"
+  comparison_target: "C-T3"
+  # 핵심 비교:
+  #   C-T3 (ML): ~100Mbps 구간에서 전환 (loss 발생 전)
+  #   D-T3 (rule): ~200Mbps 구간에서 전환 (loss 발생 후)
+  #   → D-T3의 cumulative loss > C-T3의 cumulative loss

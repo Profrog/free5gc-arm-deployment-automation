@@ -56,56 +56,74 @@ LABELS = ["ipvlan", "macvlan"]
 # [IETF BMWG-02 §4.1.3]: "CNI optimized for high-throughput TCP bulk traffic
 #   may perform suboptimally under UDP-heavy traffic"
 
-SYNTHETIC_PROFILES = {
-    "ipvlan_optimal": {
-        # mMTC/VoNR: 소패킷, 고빈도, 저throughput, 다수 UE
-        "throughput_mbps": (1, 50),       # 1~50 Mbps
-        "packet_loss_pct": (0.0, 2.0),   # 정상 범위
-        "total_pps": (5000, 100000),     # 높은 pps (소패킷)
-        "cpu_milli": (20, 200),          # 낮은 CPU (ipvlan 경량)
-        "mem_mi": (30, 80),
-        "label": "ipvlan",
+# ═══════════════════════════════════════════════════════
+# 시계열 패턴 기반 학습 데이터 생성
+# 학습 패턴(5종)은 실험 패턴과 의도적으로 상이하게 설계하여
+# 과적합이 아닌 일반화된 추세 판단 능력을 학습시킴
+# ═══════════════════════════════════════════════════════
+
+TRAINING_PATTERNS = {
+    "rapid_ramp": {
+        # 패턴 1: 급상승 (30초에 10→300Mbps)
+        # → "빨리 올라가니까 즉시 전환 필요"
+        "description": "급상승 — 빠른 전환 결정 필요",
+        "duration_steps": 6,
+        "throughput_curve": [10, 60, 130, 200, 260, 300],
+        "label_switch_at": 2,  # step 2(130Mbps)부터 macvlan 필요
     },
-    "macvlan_optimal": {
-        # eMBB: 대패킷, 고throughput, 저pps
-        "throughput_mbps": (100, 500),    # 100~500 Mbps
-        "packet_loss_pct": (0.0, 3.0),   # 약간의 loss 허용
-        "total_pps": (5000, 50000),      # 상대적 낮은 pps (대패킷)
-        "cpu_milli": (100, 500),         # 중~고 CPU
-        "mem_mi": (50, 150),
-        "label": "macvlan",
+    "slow_ramp": {
+        # 패턴 2: 완상승 (300초에 10→300Mbps)
+        # → "천천히 올라가지만 결국 전환 필요"
+        "description": "완상승 — 여유 있지만 결국 전환",
+        "duration_steps": 10,
+        "throughput_curve": [10, 25, 45, 65, 90, 120, 155, 200, 250, 300],
+        "label_switch_at": 5,  # step 5(120Mbps)부터 macvlan 필요
     },
-    "ipvlan_degraded": {
-        # ipvlan 사용 중 고throughput으로 CPU 병목 발생 → macvlan 전환 필요
-        "throughput_mbps": (80, 300),
-        "packet_loss_pct": (5.0, 30.0),  # 높은 loss (CPU 병목)
-        "total_pps": (30000, 80000),
-        "cpu_milli": (400, 900),         # CPU 과부하
-        "mem_mi": (80, 200),
-        "label": "macvlan",
+    "spike_return": {
+        # 패턴 3: spike 후 복귀 (10→200→10)
+        # → "일시적이니까 전환하면 안 됨" (false positive 방지)
+        "description": "일시적 spike — 전환 불필요",
+        "duration_steps": 8,
+        "throughput_curve": [10, 50, 150, 200, 180, 80, 30, 10],
+        "label_switch_at": None,  # 전환 불필요 (전부 ipvlan 유지)
     },
-    "macvlan_overhead": {
-        # macvlan 사용 중 소패킷 다수 UE로 MAC lookup 오버헤드 → ipvlan 전환 필요
-        "throughput_mbps": (5, 40),
-        "packet_loss_pct": (0.5, 5.0),
-        "total_pps": (50000, 200000),    # 매우 높은 pps
-        "cpu_milli": (200, 600),         # MAC lookup으로 CPU 높음
-        "mem_mi": (60, 120),
-        "label": "ipvlan",
+    "step_plateau": {
+        # 패턴 4: 계단식 (10→100 유지→200)
+        # → "정체 후 재상승 감지"
+        "description": "계단식 상승 — 정체 구간 후 전환",
+        "duration_steps": 8,
+        "throughput_curve": [10, 60, 100, 100, 100, 150, 200, 200],
+        "label_switch_at": 5,  # step 5(150Mbps)부터 macvlan 필요
+    },
+    "oscillation": {
+        # 패턴 5: 진동 (80↔120 반복)
+        # → "threshold 근처 왔다갔다 — 전환하면 안 됨" (flapping 방지)
+        "description": "threshold 근처 진동 — flapping 방지",
+        "duration_steps": 10,
+        "throughput_curve": [80, 110, 85, 120, 90, 115, 85, 110, 95, 100],
+        "label_switch_at": None,  # 전환 불필요 (진동일 뿐)
     },
 }
 
+# Feature 정의 (시계열 추세 포함)
+FEATURES = ["throughput_mbps", "throughput_delta", "throughput_slope",
+            "packet_loss_pct", "loss_delta", "cpu_milli", "cpu_delta"]
+LABELS = ["ipvlan", "macvlan"]
+
 
 # ═══════════════════════════════════════════════════════
-# 합성 데이터 생성
+# 합성 데이터 생성 (시계열 패턴 기반)
 # ═══════════════════════════════════════════════════════
 
-def generate_synthetic_data(n_samples_per_profile: int = 500, noise: float = 0.1) -> tuple:
-    """선행연구 기반 합성 학습 데이터 생성
+def generate_synthetic_data(n_variations: int = 100, noise: float = 0.1) -> tuple:
+    """시계열 패턴 기반 합성 학습 데이터 생성
+
+    각 패턴을 n_variations만큼 노이즈를 달리하여 생성.
+    각 step을 하나의 샘플로 변환 (window feature 포함).
 
     Args:
-        n_samples_per_profile: 프로파일당 샘플 수
-        noise: 가우시안 노이즈 비율 (0~1)
+        n_variations: 패턴당 변형 횟수
+        noise: 가우시안 노이즈 비율
 
     Returns:
         (X, y) — features array, labels array
@@ -113,18 +131,66 @@ def generate_synthetic_data(n_samples_per_profile: int = 500, noise: float = 0.1
     X_all = []
     y_all = []
 
-    for profile_name, profile in SYNTHETIC_PROFILES.items():
-        for _ in range(n_samples_per_profile):
-            sample = []
-            for feature in FEATURES:
-                low, high = profile[feature]
-                value = np.random.uniform(low, high)
-                # 노이즈 추가
-                value += np.random.normal(0, abs(value) * noise)
-                value = max(0, value)  # 음수 방지
-                sample.append(value)
-            X_all.append(sample)
-            y_all.append(profile["label"])
+    for pattern_name, pattern in TRAINING_PATTERNS.items():
+        curve = pattern["throughput_curve"]
+        switch_at = pattern["label_switch_at"]
+        n_steps = len(curve)
+
+        for _ in range(n_variations):
+            # 노이즈가 적용된 곡선 생성
+            noisy_curve = [max(0, v + np.random.normal(0, v * noise)) for v in curve]
+
+            # 각 step에서의 파생 메트릭 시뮬레이션
+            for i in range(n_steps):
+                throughput = noisy_curve[i]
+
+                # delta: 이전 step 대비 변화
+                throughput_delta = (noisy_curve[i] - noisy_curve[i-1]) if i > 0 else 0
+
+                # slope: 최근 3개 step의 선형 기울기
+                if i >= 2:
+                    recent = noisy_curve[max(0, i-2):i+1]
+                    throughput_slope = (recent[-1] - recent[0]) / len(recent)
+                else:
+                    throughput_slope = throughput_delta
+
+                # packet_loss: throughput에 비례 (ipvlan 특성 시뮬레이션)
+                # ipvlan에서 150Mbps 이상이면 loss 시작
+                if throughput > 150:
+                    loss = min(30, (throughput - 150) * 0.15) + np.random.normal(0, 0.5)
+                elif throughput > 100:
+                    loss = (throughput - 100) * 0.02 + np.random.normal(0, 0.3)
+                else:
+                    loss = max(0, np.random.normal(0.1, 0.2))
+                loss = max(0, loss)
+
+                loss_delta = loss - (max(0, (noisy_curve[i-1] - 100) * 0.02) if i > 0 else 0)
+
+                # CPU: throughput에 비례
+                cpu = 50 + throughput * 2.5 + np.random.normal(0, 20)
+                cpu = max(20, cpu)
+                cpu_delta = (cpu - (50 + noisy_curve[i-1] * 2.5)) if i > 0 else 0
+
+                # Feature vector
+                features = [
+                    throughput,
+                    throughput_delta,
+                    throughput_slope,
+                    loss,
+                    loss_delta,
+                    cpu,
+                    cpu_delta,
+                ]
+                X_all.append(features)
+
+                # 라벨: switch_at 이전은 ipvlan, 이후는 macvlan
+                # None이면 전부 ipvlan (전환 불필요 패턴)
+                if switch_at is None:
+                    y_all.append("ipvlan")
+                elif i >= switch_at:
+                    y_all.append("macvlan")
+                else:
+                    y_all.append("ipvlan")
 
     return np.array(X_all), np.array(y_all)
 

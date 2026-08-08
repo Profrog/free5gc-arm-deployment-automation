@@ -908,3 +908,96 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 | 6 | ML 모델 단순 | model-agnostic 표준, RF는 학계 관행 | [16] |
 | 7 | VM 환경 격리 | steal time < 1% 검증, 동일 조건 비교 | [17] |
 | 8 | ipvlan/macvlan만 | ARM64 가용성, 단일 변수 통제, DRANET 1차 지원 | [13] |
+
+---
+
+## [19] ML 학습 전략 — Predictive 모델을 위한 시계열 패턴 기반 학습
+
+### 핵심 설계: "현재 값이 아닌 추세(trend)를 학습"
+
+```
+Rule-based (reactive):
+  입력: [throughput=200Mbps, loss=7%]
+  판단: "loss > 5% → 전환!" (이미 손실 발생 후)
+
+ML (predictive):
+  입력: [throughput=100Mbps, Δthroughput=+20, slope=+15, loss=0.5%, Δloss=+0.3]
+  판단: "이 추세면 30초 후 loss 발생 → 지금 전환" (손실 발생 전)
+```
+
+### Feature 설계 (7차원)
+
+| Feature | 의미 | predictive에 기여하는 이유 |
+|---------|------|--------------------------|
+| throughput_mbps | 현재 throughput | 기본 상태 |
+| **throughput_delta** | 직전 대비 변화량 | 올라가는 중인지 |
+| **throughput_slope** | window 기울기 | **상승 속도** (핵심) |
+| packet_loss_pct | 현재 loss | 이미 문제인지 |
+| **loss_delta** | loss 변화량 | loss가 커지는 중인지 |
+| cpu_milli | 현재 CPU | 부하 수준 |
+| cpu_delta | CPU 변화량 | CPU가 올라가는 중인지 |
+
+### 학습 패턴 (5종) — 실험 패턴과 의도적으로 상이
+
+| # | 패턴 | 학습 의도 | 실험과의 차이 |
+|---|------|----------|-------------|
+| 1 | 급상승 (30s에 10→300) | 빠른 전환 결정 | 실험은 180s ramp |
+| 2 | 완상승 (300s에 10→300) | 여유 있는 판단 | 실험은 180s ramp |
+| 3 | **spike 후 복귀** (10→200→10) | **전환 안 함** (false positive 방지) | 실험에 없음 |
+| 4 | 계단식 (10→100 유지→200) | 정체 후 재상승 감지 | 실험은 연속 상승 |
+| 5 | **진동** (80↔120 반복) | **전환 안 함** (flapping 방지) | 실험에 없음 |
+
+**학습 ≠ 실험**: 의도적으로 상이하게 설계하여 과적합 아닌 일반화(generalization) 검증.
+
+### 라벨링 기준
+
+```
+각 패턴의 switch_at 시점:
+  - switch_at 이전: label = "ipvlan" (아직 전환 불필요)
+  - switch_at 이후: label = "macvlan" (전환 필요)
+  - switch_at = None: 전부 "ipvlan" (전환하면 안 됨)
+
+switch_at 결정 근거:
+  → baseline 실험(A-T3)에서 ipvlan의 loss가 시작되는 throughput 지점
+  → 그 지점 "이전"에 전환하도록 라벨링 (predictive)
+```
+
+### 학습 결과
+
+```
+CV Accuracy: 90.1% ± 3.8% (5-fold)
+F1 (ipvlan): 0.96 | F1 (macvlan): 0.92
+
+Feature Importance:
+  throughput_mbps      0.30   ← 현재 상태
+  cpu_milli            0.21
+  throughput_slope     0.14   ← ★ 추세 (ML의 핵심 가치)
+  packet_loss_pct      0.14
+  loss_delta           0.11   ← ★ 변화 방향
+  throughput_delta     0.06
+  cpu_delta            0.04
+```
+
+**핵심 발견**: `throughput_slope`(0.14)와 `loss_delta`(0.11)가 유의미한 feature.
+→ 모델이 "현재 값"뿐 아니라 "변화 추세"를 판단에 활용함을 확인.
+→ Rule-based(현재 값만 봄)와의 차별점이 feature importance로 정량화됨.
+
+### 논문에서의 서술
+
+> "ML 모델의 학습 데이터는 5종의 트래픽 패턴(급상승, 완상승, spike 복귀, 계단식, 진동)으로 생성하며, 실험에 사용되는 패턴(180초 점진 증가)과 의도적으로 상이하게 설계하여 일반화 능력을 검증한다. Feature importance 분석 결과, throughput_slope(0.14)와 loss_delta(0.11)가 유의미한 판단 기준으로 활용되어, 모델이 현재 값의 threshold 비교가 아닌 시계열 추세를 기반으로 predictive 판단을 수행함을 확인하였다. 이는 rule-based 접근(threshold 초과 시 reactive 반응)이 제공할 수 없는 예측적 전환의 근거이다."
+
+### Rule-based와의 비교 논리
+
+```
+동일 시나리오 (100Mbps 구간):
+
+Rule-based:
+  throughput=100, loss=0.5%
+  → loss < 5%, throughput < 150 → "ipvlan 유지" (문제 없다고 판단)
+  → 30초 후 throughput=200, loss=12% → 그제야 전환 (이미 손실 누적)
+
+ML:
+  throughput=100, slope=+20, delta=+15, loss=0.5%, loss_delta=+0.3
+  → "slope +20이면 30초 후 160Mbps, loss 급증 예상" → 지금 전환
+  → 30초 후 throughput=200이지만 이미 macvlan → loss 0.5% 유지
+```

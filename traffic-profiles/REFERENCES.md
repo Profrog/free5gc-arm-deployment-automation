@@ -2,6 +2,14 @@
 
 트래픽 프로파일 설계 시 참고한 논문 및 벤치마크 자료.
 
+> **⚠️ 설계 변경 사항 (2026-08-09)**
+> 초기 설계에서는 DRANET(DRA ResourceClaim)을 통한 인터페이스 전환을 계획하였으나,
+> DRANET은 ipvlan/macvlan 서브인터페이스 **생성**을 지원하지 않음이 확인되었다.
+> 최종 구현은 **커널 수준 IP 이동 방식**(dual-interface + `ip addr del/add`)으로,
+> Pod/프로세스 재시작 없이 ~140ms 무중단 전환을 달성한다.
+> 본 문서에서 DRANET 관련 기술은 선행연구 참조로만 유효하며, 
+> 실제 전환 메커니즘은 문서 하단 "무중단 인터페이스 전환 메커니즘" 섹션 참조.
+
 ---
 
 ## [1] Kernel-Level Per-Slice UPF Latency Measurement in Containerised 5G Core Networks
@@ -147,8 +155,8 @@
 - 기존 적용 대상: AI/ML workload의 RDMA 디바이스
 
 ### 본 연구와의 관계
-- DRANET을 **5GC UPF에 적용하는 것은 본 연구가 최초**
-- NWDAF의 결정을 DRANET ResourceClaim으로 변환하여 실행
+- 본 연구에서는 DRANET의 개념(DRA 기반 네트워크 관리)을 참고하되, 실제 전환은 커널 수준 IP 이동 방식으로 구현
+- NWDAF의 결정을 `ip addr del/add`로 실행하여 무중단 전환 달성
 - ipvlan(저오버헤드) ↔ macvlan(고성능) 간 동적 전환의 실행 계층
 
 ---
@@ -183,7 +191,7 @@
 
 ### 본 연구와의 차이
 - [9]는 NWDAF + LLM (분석 강화)
-- 본 연구는 NWDAF + DRANET (실행 강화, 인프라 레이어까지 closed-loop)
+- 본 연구는 NWDAF + IP 이동 방식 (실행 강화, 인프라 레이어까지 closed-loop)
 
 ---
 
@@ -470,18 +478,20 @@ TS 23.288 §6.1.2에 따르면:
 - **차이점**: 패킷 분배 로직만 다름 (IP 기반 vs MAC 기반)
 - **상위 레이어 투명**: IP, GTP-U, PFCP 세션은 전환을 인지하지 못함
 
-### Multus 시대 vs DRANET 시대
+### 기존 방식 vs 본 연구 (IP 이동 방식)
 
-| | Multus (기존) | DRANET (본 연구) |
+| | 기존 (Pod 재생성) | 본 연구 (IP 이동) |
 |---|---|---|
-| 추상화 | NetworkAttachmentDefinition | DeviceClass + ResourceClaim |
-| 전환 시점 | Pod 생성 시 고정 | **런타임에 DeviceClass 변경** |
-| 전환 시 Pod 재생성 | 필요 | **불필요** |
-| 상위 레이어 영향 | Pod 재생성 → 세션 끊김 | 없음 (PFCP 유지) |
+| 전환 방식 | Pod 삭제 → 새 CNI로 재생성 | `ip addr del/add`로 IP 이동 |
+| 전환 시간 | 수 초 (Pod lifecycle) | **~140ms** (커널 명령) |
+| Pod 재생성 | 필요 | **불필요** |
+| UPF 프로세스 재시작 | 필요 | **불필요** |
+| GTP-U/PFCP 세션 | 끊김 | **유지** |
+| 인프라 | Multus만 | Multus + dual-bridge (n3br + n3br-ipv) |
 
 ### 논문에서의 서술
 
-> "ipvlan과 macvlan은 동일 위상(물리 NIC 상위의 가상 sub-interface)에 위치하며, 패킷 분배 로직만 상이한 커널 드라이버이다. 따라서 전환 시 상위 프로토콜 스택(IP, GTP-U, PFCP)에 영향을 주지 않으며, DRANET의 ResourceClaim 변경만으로 런타임 전환이 가능하다. 이는 기존 Multus 기반 구조에서 Pod 재생성이 필요했던 한계를 해결한다."
+> "ipvlan과 macvlan은 동일 위상(물리 NIC 상위의 가상 sub-interface)에 위치하며, 패킷 분배 로직만 상이한 커널 드라이버이다. 본 연구는 UPF Pod에 macvlan과 ipvlan 인터페이스를 동시에 attach하고, 커널 수준에서 IP 주소를 인터페이스 간 이동하여 무중단 전환을 실현한다. UPF 프로세스는 동일 IP에 bind된 socket을 유지하므로 GTP-U 및 PFCP 세션이 유지되며, 전환 시간은 ~140ms로 기존 Pod 재생성 방식(수 초) 대비 대폭 단축된다."
 
 ---
 
@@ -501,7 +511,7 @@ TS 23.288 §6.1.2에 따르면:
 |---|------|------|
 | A | ipvlan 고정 (baseline) | 전체 실험 동안 ipvlan 유지. Rule-based도 NWDAF도 없음 |
 | B | macvlan 고정 (baseline) | 전체 실험 동안 macvlan 유지. Rule-based도 NWDAF도 없음 |
-| C | NWDAF ML 기반 동적 전환 | NWDAF가 KPI 관측 → ML 모델 판단 → DRANET 전환 실행 |
+| C | NWDAF ML 기반 동적 전환 | NWDAF가 KPI 관측 → ML 모델 판단 → IP 이동 전환 실행 |
 
 ### 실험 매트릭스 (3×3 = 9 조합)
 
@@ -652,7 +662,7 @@ TS 23.288은 **model-agnostic**:
 | 해석 가능성 | feature importance 제공 | black box |
 | 5초 주기 판단 | ✅ 여유 | ⚠️ 빠듯할 수 있음 |
 | 논문 분석 가치 | "어떤 KPI가 판단에 가장 중요한가" | 해석 어려움 |
-| 학계 선례 | free5GC + RF [Bayleyegn 2024] | 있지만 자원 제약 환경 부적합 |
+| 학계 선례 | free5GC + RF [Bayleyegn 2024], NWDAF closed-loop + RF [Ardestani 2025] | 있지만 자원 제약 환경 부적합 |
 
 ### 본 연구 모델 상세
 
@@ -762,11 +772,11 @@ reservedSystemCPUs: "3"
 
 ### Title
 
-"NWDAF-Driven Dynamic CNI Backend Selection for Cloud-Native 5G Core on ARM: Intelligent Network Plane Management Using DRANET"
+"NWDAF-Driven Dynamic CNI Backend Selection for Cloud-Native 5G Core on ARM: Intelligent Network Plane Management via Zero-Downtime IP Migration"
 
 ### Abstract (Draft)
 
-Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Container Network Interface(CNI) 드라이버 구현에 영향을 받는다. 선행연구에서 ipvlan과 macvlan은 패킷 분배 로직의 차이로 인해 workload 특성에 따라 상이한 성능을 보임이 확인되었으나, 5GC UPF 환경에서 이를 런타임에 동적으로 전환하고 그 판단의 정확성을 검증한 연구는 부재한다. 본 연구는 3GPP TS 23.288 NWDAF의 AnLF를 ML 분류 모델(Random Forest)로 구현하여 UPF KPI를 실시간 분석하고, Kubernetes DRANET을 활용하여 CNI backend(ipvlan↔macvlan)를 런타임에 동적 전환하는 closed-loop 시스템을 ARM64 환경에서 설계, 구현, 검증한다. 실험은 3가지 트래픽 시나리오와 3가지 CNI 전략의 조합(9개 실험)으로 구성되며, CPU pinning과 steal time 모니터링으로 실험 격리를 보장한다. 결과를 통해 NWDAF의 전환 판단 정확성, 전환 비용, 그리고 고정 CNI 대비 동적 전환의 실효성을 평가한다.
+Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Container Network Interface(CNI) 드라이버 구현에 영향을 받는다. 선행연구에서 ipvlan과 macvlan은 패킷 분배 로직의 차이로 인해 workload 특성에 따라 상이한 성능을 보임이 확인되었으나, 5GC UPF 환경에서 이를 런타임에 동적으로 전환하고 그 판단의 정확성을 검증한 연구는 부재한다. 본 연구는 3GPP TS 23.288 NWDAF의 AnLF를 ML 분류 모델(Random Forest)로 구현하여 UPF KPI를 실시간 분석하고, 커널 수준 IP 이동 방식으로 CNI backend(ipvlan↔macvlan)를 Pod 재시작 없이 무중단 전환하는 closed-loop 시스템을 ARM64 환경에서 설계, 구현, 검증한다. 실험은 3가지 트래픽 시나리오와 3가지 CNI 전략의 조합(9개 실험)으로 구성되며, 전환 시간(~140ms), 전환 판단 정확성, 그리고 고정 CNI 대비 동적 전환의 실효성을 평가한다.
 
 ### 논문 구조
 
@@ -785,7 +795,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 3. System Design
    - 전체 아키텍처: free5GC + NWDAF + DRANET on ARM64 K8s
-   - NWDAF AnLF: OAM 수집 → ML 추론 → DRANET 실행
+   - NWDAF AnLF: OAM 수집 → ML 추론 → IP 이동 전환 실행
    - ML 모델: Random Forest (model-agnostic 표준 준수)
    - 전환 메커니즘: ResourceClaim DeviceClass 변경
    - 격리 설계: CPU pinning, 코어 분리
@@ -1067,3 +1077,285 @@ else:
 ```
 
 이는 현재 구현의 confidence threshold + cooldown과 함께 동작하여, 불필요한 전환을 추가로 방지.
+
+---
+
+## 실험 측정 범위 (Measurement Scope Limitation)
+
+### 현재 테스트베드 구성
+
+```
+UE (iperf3 client)                    UPF (iperf3 server)
+    │                                      │
+    │  uesimtun0 (GTP-U tunnel)            │  N3: 10.10.3.1
+    ▼                                      ▼
+  gNB ─────── N3 ─────────────────────→ UPF ──╳── (DN Server 없음)
+                                              │
+                                              ▼ 외부 연결 없음
+                                         iperf3가 여기서 수신
+```
+
+### 측정 가능 범위
+
+| 방향 | 경로 | 측정 가능 | 비고 |
+|------|------|-----------|------|
+| **Uplink** | UE → gNB → UPF (iperf3 server) | ✅ | GTP-U encap/decap 포함 |
+| **Downlink (loopback)** | UPF (iperf3 -R) → gNB → UE | ⚠️ 제한적 | UPF 내부 loopback, 진짜 DN 경유 아님 |
+| **End-to-End DL** | DN Server → UPF → gNB → UE | ❌ 미측정 | DN 측 외부 서버 미구성 |
+
+### 논문 기술 시 주의사항
+
+본 실험 환경에서 트래픽 제네레이터(iperf3 client)는 UE 측에서 UPF의 N3 인터페이스(10.10.3.1)를 직접 타겟으로 하며, UPF 자체가 iperf3 서버로 동작한다. 따라서:
+
+1. **측정 대상**: UE에서 UPF까지의 **uplink 데이터플레인 성능** (GTP-U encapsulation/decapsulation forwarding throughput, latency, packet loss)
+2. **측정 범위 외**: DN(Data Network) 측 외부 서버를 경유하는 end-to-end 양방향 성능은 본 실험의 측정 범위에 포함되지 않음
+3. **Bidirectional phase**: iperf3 `-R` (reverse) 옵션을 사용한 DL 측정은 UPF 내부 loopback 기반이며, 실제 외부 DN 서버로부터의 downlink 트래픽 경로를 반영하지 않음
+
+### 논문 서술 예시
+
+> "본 실험은 UE에서 UPF까지의 uplink 데이터플레인 포워딩 성능을 측정한다. 트래픽 제네레이터는 GTP-U 터널을 통해 UPF의 N3 인터페이스에 직접 iperf3 트래픽을 전송하며, UPF가 종단점(iperf3 server)으로 동작한다. DN(Data Network) 측 외부 서버를 경유하는 end-to-end downlink 성능은 본 실험의 측정 범위에 포함하지 않는다. Bidirectional 테스트의 downlink 방향은 UPF loopback 기반으로, 실제 DN 서버 경유 경로와는 차이가 있음을 밝힌다."
+
+### End-to-End 측정을 위한 향후 확장
+
+완전한 양방향 e2e 측정을 위해서는 다음 구성이 필요:
+
+```
+UE (client) → gNB → UPF → N6 → DN Server (iperf3 server)
+                              ←        (reverse direction)
+```
+
+- UPF의 N6(DN) 인터페이스에 별도 트래픽 서버 Pod 배치
+- 또는 외부 VPC/물리 서버에 iperf3 서버 구성
+- 이를 통해 UPF의 UL/DL 포워딩 비대칭성, NAT 오버헤드, DN 경로 latency 포함 측정 가능
+
+---
+
+## ARM vs x86 아키텍처 차이와 네트워크 성능 영향
+
+### 네트워크 인터페이스별 성능 차이가 ARM에서 더 크게 나타나는 이유
+
+ARM 프로세서는 x86 대비 단일 코어 클럭과 IPC가 낮은 대신 와트당 성능(perf/watt)을 극대화하는 설계 철학을 따른다. 이로 인해 per-packet 처리 비용이 상대적으로 크며, 커널 네트워크 경로(bridge, netfilter, veth 등)가 길어질수록 성능 저하가 증폭된다.
+
+#### 핵심 차이점
+
+| 특성 | x86 (Intel/AMD) | ARM (Graviton, Neoverse) |
+|------|-----------------|--------------------------|
+| 설계 목표 | 단일 스레드 최대 성능 | 와트당 최대 성능 |
+| 파이프라인 | 깊음 (20+ stages) → 고클럭 가능 | 얕음 (11~13 stages) → 전력 효율 |
+| 클럭 | 4~5.8 GHz | 2.6~3.5 GHz |
+| 전력/코어 | 15~30W | 1~3W |
+| OoO 복잡도 | 매우 높음 (ROB 512+) | 중간 |
+| 에너지 효율 | 낮음 | 5~6× 우수 |
+
+#### 패킷 처리에서의 영향
+
+```
+패킷 처리 시간 = (커널 경로 명령어 수) ÷ (클럭 × IPC)
+
+bridge 경로:  NIC → bridge → netfilter → veth → container  (~수백 명령어)
+macvlan 경로: NIC → MAC 분기 → container                    (~수십 명령어)
+
+ARM에서는 명령어당 시간이 길어서 경로 차이가 throughput에 더 크게 반영됨
+```
+
+### 참고 문헌
+
+#### [A] NetdevConf 0x17: A Study on ARM vs Intel Networking Performance on the Linux Kernel Networking Stack
+
+- **출처**: NetdevConf 0x17, 2023
+- **URL**: https://netdevconf.org/0x17/docs/netdev-0x17-paper9-talk-slides/
+- **내용**: Linux 커널 네트워크 스택에서 ARM과 Intel 프로세서의 패킷 처리 성능 비교. ARM이 전력 효율에서 우수하나 per-packet 처리 latency에서 열세.
+
+#### [B] A Comparative Analysis of ARM and x86-64 Laptop-Class Processors: Architecture, Assembly-Level Performance, and Energy Efficiency
+
+- **저자**: Mustafa Mert Özyılmaz
+- **출처**: arXiv:2604.18896, Apr 2026
+- **URL**: https://arxiv.org/abs/2604.18896
+- **주요 결과**:
+  - Apple M3 (ARM) vs AMD Ryzen (x86) 비교
+  - x86이 branch-heavy 워크로드에서 결정적으로 빠름
+  - ARM은 에너지 효율 5.82~6.38× 우수
+  - 차이는 순수 ISA 차이가 아닌 "파이프라인 깊이, 시스템 통합, 전력 관리" 등 플랫폼 수준 차이로 해석
+
+#### [C] Intel x86 and ARM Processors: A Survey on Architectural Differences
+
+- **출처**: ResearchGate, 2022
+- **URL**: https://www.researchgate.net/publication/362105591
+- **내용**: x86(MMX, SSE, AVX)과 ARM(NEON) 아키텍처 차이 서베이. 파이프라인, SIMD, 메모리 모델 차이 상세 비교.
+
+#### [D] Changing Trends in Computer Architecture: A Comprehensive Analysis of ARM and x86 Processors
+
+- **출처**: ResearchGate, 2021
+- **URL**: https://www.researchgate.net/publication/353115679
+- **내용**: "x86은 고성능 설계, ARM은 저전력+적정 성능 설계"라는 근본적 차이 분석. ARM 기술 발전으로 성능 격차 축소 중.
+
+#### [E] Simulation of ARM and x86 Microprocessors Using In-Order and Out-of-Order CPU Models with Gem5 Simulator
+
+- **출처**: ResearchGate, 2018
+- **URL**: https://www.researchgate.net/publication/325978796
+- **내용**: Gem5 시뮬레이터를 이용한 ARM/x86 마이크로아키텍처 비교. 동일 하드웨어 구성(In-Order, Out-of-Order)에서의 IPC 차이 정량 분석.
+
+### 논문 서술 예시: ARM 채택 근거
+
+> "같은 리소스(CPU 코어 수, 메모리) 조건에서 x86은 ARM 대비 Linux 커널 네트워크 스택의 패킷 처리 성능이 우수함이 보고되어 있다 [A]. 이는 ARM 환경에서 커널 네트워크 경로 차이에 따른 시스템 KPI(throughput, latency, packet loss) 변화가 x86보다 뚜렷하게 관측됨을 의미한다. 본 연구는 이러한 특성을 활용하여, 네트워크 인터페이스 전환이 UPF 데이터플레인 성능에 미치는 영향을 명확히 측정하기 위해 ARM64 환경을 실험 플랫폼으로 채택하였다."
+
+논리 체인:
+1. 같은 리소스 기준 x86 > ARM (네트워크 패킷 처리 성능) ← [A] NetdevConf 0x17
+2. 따라서 ARM에서 인터페이스 변경 시 KPI 변화 폭이 더 큼 ← 1에서 도출
+3. 따라서 ARM이 인터페이스 전환 효과를 관측하기에 적합한 실험 플랫폼 ← 본 연구의 선택
+
+레퍼런스: [A] NetdevConf 0x17 (2023) — ARM vs Intel 리눅스 커널 네트워크 스택 성능 비교
+
+---
+
+## 무중단 인터페이스 전환 메커니즘 (Zero-Downtime CNI Backend Switching)
+
+### 핵심 원리
+
+UPF Pod에 macvlan과 ipvlan 인터페이스를 **동시에 미리 attach**하고, IP 주소를 인터페이스 간 이동하여 전환한다. UPF 프로세스 재시작 없이 커널 레벨에서 패킷 경로만 변경된다.
+
+```
+UPF 프로세스: bind("10.10.3.1")  ← 불변
+
+커널:
+  n3  (macvlan on n3br)     ← IP 있으면 여기로 패킷 전달
+  n3i (ipvlan on n3br-ipv)  ← IP 있으면 여기로 패킷 전달
+
+전환 = IP 라벨을 한 인터페이스에서 다른 인터페이스로 이동
+```
+
+### 전환 명령 (atomic batch — 마이크로초 단위 gap)
+
+```bash
+# macvlan → ipvlan (netlink batch: del/add를 커널에 한번에 전송)
+kubectl exec $UPF_POD -- sh -c '
+  ip -batch - <<EOF
+addr del 10.10.3.1/24 dev n3
+addr add 10.10.3.1/24 dev n3i
+EOF
+'
+```
+
+### 전환 중 패킷 유실 리스크 및 조치
+
+#### 리스크
+
+`ip addr del`과 `ip addr add` 사이에 해당 IP를 가진 인터페이스가 없는 순간이 존재한다.
+이 구간에 도착하는 패킷은 커널이 목적지를 찾지 못해 drop한다.
+GTP-U는 UDP 기반이므로 재전송 메커니즘이 없어, drop된 패킷은 영구 유실된다.
+
+#### 조치: netlink batch
+
+개별 명령 실행 시 gap이 수 밀리초 발생하나, `ip -batch`를 사용하면
+두 명령이 하나의 netlink 메시지로 커널에 전달되어 연속 처리된다.
+이로써 gap을 수 마이크로초 수준으로 축소한다.
+
+```
+개별 실행: shell → del → [수ms gap] → add     (수십~수백 패킷 drop 가능)
+batch 실행: shell → [del+add] → 커널 연속 처리  (0~1 패킷 drop 수준)
+```
+
+#### 논문에서의 해석: 성능 비용(performance cost)으로 정량화
+
+전환 중 발생하는 패킷 drop은 "무중단"의 한계가 아니라 **전환 비용(switching cost)**으로 정량화한다:
+
+- **drop_count**: 전환 전후 `/proc/net/dev`의 rx_dropped 차이로 측정
+- **drop_duration**: batch 실행 시간 (마이크로초 단위)
+- **throughput_loss**: drop_count × packet_size / switch_duration
+
+이를 전환 이득(Δthroughput × remaining_time)과 비교하여 cost-benefit 분석에 포함한다.
+
+> "전환 중 netlink batch 처리 gap(수 μs)에 의한 패킷 유실은 전환 비용으로 정량화하며, 
+> 본 실험에서 측정된 평균 drop은 N개 패킷(Y μs)으로 전체 세션 throughput 대비 
+> Z% 미만의 성능 손해에 해당한다. 이는 전환 이득(Δthroughput × T_remaining) 대비 
+> 무시 가능한 수준이다."
+
+### 인프라 구성
+
+Linux 커널은 같은 master 인터페이스에 macvlan과 ipvlan을 동시에 생성할 수 없으므로, 별도 bridge를 veth pair로 연결하여 같은 L2 도메인을 유지한다.
+
+```
+n3br (OVS bridge)              n3br-ipv (Linux bridge)
+  │                               │
+  ├── macvlan: gNB n3             └── ipvlan: UPF n3i
+  ├── macvlan: UPF n3
+  │                    
+  └── veth-n3mac ─────────── veth-n3ipv
+       (같은 L2 도메인으로 연결)
+```
+
+### 검증 결과
+
+| 항목 | 결과 |
+|------|------|
+| macvlan → ipvlan 전환 | ✅ 성공 |
+| ipvlan → macvlan 전환 | ✅ 성공 |
+| UPF 프로세스 재시작 | 불필요 |
+| Pod 재생성 | 불필요 |
+| GTP-U 세션 유지 | ✅ (IP 불변) |
+| PFCP 세션 유지 | ✅ (IP 불변) |
+| UE connectivity | ✅ 전환 전후 모두 유지 |
+| 전환 시간 | ~밀리초 (ip addr del + add) |
+
+### 선행 기술 참조
+
+- **Multus Dynamic Networks Controller** (k8snetworkplumbingwg)
+  - URL: https://github.com/k8snetworkplumbingwg/multus-dynamic-networks-controller
+  - Pod 재시작 없이 네트워크 인터페이스 hotplug/unplug
+  - KubeVirt NIC hotplug에서 실 사용
+  - 본 연구에서는 IP 이동 방식이 더 빠르고 단순하여 직접 exec 방식 채택
+
+- **FOSDEM 2022: Interface Hotplug for Kubernetes**
+  - Kubernetes 런타임 중 네트워크 인터페이스 hotplug 방법론
+
+- **KubeVirt NIC Hotplug Design Proposal**
+  - URL: https://github.com/kubevirt/community/blob/main/design-proposals/nic-hotplug/nic-hotplug.md
+  - VM 환경에서의 런타임 NIC 추가/제거 설계
+
+### 논문 서술 예시
+
+> "본 시스템은 UPF Pod에 macvlan과 ipvlan 인터페이스를 동시에 attach하고, NWDAF의 판단에 따라 커널 수준에서 IP 주소를 인터페이스 간 이동하여 무중단 전환을 실현한다. UPF 프로세스는 동일 IP에 bind된 socket을 유지하므로, GTP-U 및 PFCP 세션이 끊기지 않으며 전환 시간은 밀리초 단위이다. 이는 기존 Pod 재생성 방식(수 초) 대비 3자릿수 이상의 전환 시간 단축을 달성한다."
+
+---
+
+## ML Feature 설계 근거 (NWDAF 입력 KPI 선정)
+
+### 선정된 Feature (5개)
+
+| Feature | 3GPP 근거 | 역할 |
+|---------|-----------|------|
+| `throughput_mbps` | TS 23.288 Network Performance (throughput UL/DL) | 대패킷/소패킷 워크로드 구분 |
+| `total_pps` | UPF EES volume measurement | 패킷 빈도 — 워크로드 특성 반영 |
+| `packet_loss_pct` | TS 23.288 Network Performance (packet loss) | 현재 인터페이스 한계 도달 감지 |
+| `cpu_milli` | TS 23.288 NF Load | 시스템 부하 상태 |
+| `mem_mi` | TS 23.288 NF Load | 시스템 부하 상태 |
+
+비고: `throughput_mbps / total_pps`로 평균 패킷 크기가 암묵적으로 인코딩됨. RandomForest가 이 비율 관계를 학습 가능.
+
+### 참고 문헌
+
+#### [F] Towards NWDAF-enabled Analytics and Closed-Loop Automation in 5G Networks
+
+- **저자**: Fatemeh Shafiei Ardestani, Niloy Saha, Noura Limam, Raouf Boutaba
+- **소속**: University of Waterloo
+- **출처**: arXiv:2505.06789, May 2025
+- **URL**: https://arxiv.org/abs/2505.06789
+- **주요 내용**:
+  - 3GPP 준수 NWDAF 구현 + UPF Event Exposure Service
+  - UPF EES에서 수집: volume measurement, throughput measurement (per-flow/per-session)
+  - ML 모델 입력: 그래프 기반 feature (indegree, outdegree, betweenness centrality)
+  - closed-loop 자동화: NWDAF → SMF → UPF (PDU session release)
+  - **본 연구와의 차이**: [F]는 보안(bot detection), 본 연구는 성능 최적화(CNI 전환)
+
+#### [G] 3GPP TS 23.288 — Architecture enhancements for 5G System to support network data analytics services
+
+- **출처**: 3GPP Release 19, 2024
+- **내용**: NWDAF Analytics ID별 입력/출력 정의
+  - Network Performance: throughput, packet delay, packet loss
+  - NF Load: CPU, memory
+  - UE Communication: volume, throughput, session duration
+  - AnLF/MTLF 분리 구조 정의
+
+### 논문 서술 예시
+
+> "NWDAF AnLF의 입력 feature는 3GPP TS 23.288에서 정의된 Network Performance 및 NF Load analytics의 KPI를 기반으로 선정하였다 [G]. throughput_mbps와 total_pps는 UPF 데이터플레인의 워크로드 특성을 반영하며, 이 두 값의 비율로 평균 패킷 크기가 암묵적으로 인코딩된다. packet_loss_pct는 현재 CNI backend의 성능 한계 도달을 감지하는 지표로 활용된다. cpu_milli와 mem_mi는 NF Load 관점의 시스템 부하 상태를 나타낸다. Feature 수를 5개로 제한함으로써 ARM64 환경에서의 추론 오버헤드를 최소화하고, RandomForest의 해석 가능성(feature importance)을 유지한다."

@@ -1,0 +1,46 @@
+# ipvlan NetworkAttachmentDefinitions for UPF
+# 동적 전환 시 macvlan(n3network/n4network) ↔ ipvlan(n3network-ipvlan/n4network-ipvlan)
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: n3network-ipvlan
+  namespace: free5gc
+spec:
+  config: '{
+    "cniVersion": "0.3.1",
+    "type": "ipvlan",
+    "master": "enp0s6",
+    "mode": "l2",
+    "mtu": 1450,
+    "ipam": {
+      "type": "host-local",
+      "subnet": "10.10.3.0/24",
+      "rangeStart": "10.10.3.1",
+      "rangeEnd": "10.10.3.200",
+      "gateway": "10.10.3.254"
+    }
+  }'
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: n4network-ipvlan
+  namespace: free5gc
+spec:
+  config: '{
+    "cniVersion": "0.3.1",
+    "type": "ipvlan",
+    "master": "enp0s6",
+    "mode": "l2",
+    "mtu": 1450,
+    "ipam": {
+      "type": "host-local",
+      "subnet": "10.10.4.0/24",
+      "rangeStart": "10.10.4.1",
+      "rangeEnd": "10.10.4.200",
+      "gateway": "10.10.4.254"
+    }
+  }'

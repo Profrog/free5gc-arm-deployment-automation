@@ -200,11 +200,16 @@ class KPICollector:
 class CNIClassifier:
     """학습된 모델로 최적 CNI backend 분류
 
-    입력 features: [throughput_mbps, packet_loss_pct, total_pps, cpu_milli, mem_mi]
+    입력 features: [throughput_mbps, throughput_delta, throughput_slope,
+                    packet_loss_pct, loss_delta, cpu_milli, cpu_delta]
     출력: "ipvlan" 또는 "macvlan"
+
+    ML 모드: 시계열 추세(trend)를 보고 predictive 판단
+    Rule-based 모드: 현재 값 threshold 기반 reactive 판단
     """
 
-    FEATURES = ["throughput_mbps", "packet_loss_pct", "total_pps", "cpu_milli", "mem_mi"]
+    FEATURES = ["throughput_mbps", "throughput_delta", "throughput_slope",
+                "packet_loss_pct", "loss_delta", "cpu_milli", "cpu_delta"]
 
     def __init__(self, model_path: Path = DEFAULT_MODEL_PATH):
         self.model = None
@@ -244,47 +249,60 @@ class CNIClassifier:
             return self._rule_based(features)
 
     def _extract_features(self, samples: list[dict]) -> list[float]:
-        """샘플 윈도우에서 feature vector 추출 (평균)"""
-        feature_values = {f: [] for f in self.FEATURES}
+        """샘플 윈도우에서 feature vector 추출 (추세 포함)"""
+        if not samples:
+            return [0.0] * len(self.FEATURES)
 
-        for sample in samples:
-            for f in self.FEATURES:
-                if f in sample:
-                    feature_values[f].append(sample[f])
+        # 현재 값 (마지막 샘플)
+        current = samples[-1]
+        throughput = current.get("throughput_mbps", 0)
+        loss = current.get("packet_loss_pct", 0)
+        cpu = current.get("cpu_milli", 0)
 
-        # 각 feature의 평균
-        return [
-            np.mean(feature_values[f]) if feature_values[f] else 0.0
-            for f in self.FEATURES
-        ]
+        # Delta (현재 - 이전)
+        if len(samples) >= 2:
+            prev = samples[-2]
+            throughput_delta = throughput - prev.get("throughput_mbps", 0)
+            loss_delta = loss - prev.get("packet_loss_pct", 0)
+            cpu_delta = cpu - prev.get("cpu_milli", 0)
+        else:
+            throughput_delta = 0
+            loss_delta = 0
+            cpu_delta = 0
+
+        # Slope (window 전체의 선형 기울기)
+        if len(samples) >= 3:
+            tput_series = [s.get("throughput_mbps", 0) for s in samples]
+            throughput_slope = (tput_series[-1] - tput_series[0]) / len(tput_series)
+        else:
+            throughput_slope = throughput_delta
+
+        return [throughput, throughput_delta, throughput_slope,
+                loss, loss_delta, cpu, cpu_delta]
 
     def _rule_based(self, features: list[float]) -> str:
-        """ML 모델 없을 때의 rule-based 판단
+        """ML 모델 없을 때의 rule-based 판단 (reactive — threshold 기반)
 
-        규칙 (선행연구 기반):
-        - 고 throughput(>100Mbps) + 저 pps → macvlan (대패킷, NIC offload 유리)
-        - 고 pps(>10000) + 저 throughput → ipvlan (소패킷, 커널 내부 처리 유리)
-        - 높은 packet_loss(>5%) + 고 throughput → macvlan (CPU 병목 해소)
+        Rule-based는 "현재 값"만 보고 판단 (추세 무시):
+        - 현재 throughput > 100Mbps → macvlan
+        - 현재 loss > 5% → macvlan
+        - 그 외 → ipvlan
+
+        이것이 ML(predictive)과의 차이를 만듦:
+        - Rule: threshold 도달 후 반응 (이미 손실 발생)
+        - ML: 추세를 보고 threshold 도달 전 예측 전환
         """
-        throughput, loss, pps, cpu, mem = features
+        throughput, throughput_delta, throughput_slope, \
+            loss, loss_delta, cpu, cpu_delta = features
 
-        # 대패킷 고throughput → macvlan
-        if throughput > 100 and pps < 50000:
+        # Reactive: 현재 값 기반만 (추세 무시)
+        if loss > 5.0:
+            return "macvlan"
+        if throughput > 150:
+            return "macvlan"
+        if cpu > 500:
             return "macvlan"
 
-        # 고 loss + 고 throughput → macvlan (CPU 병목)
-        if loss > 5.0 and throughput > 50:
-            return "macvlan"
-
-        # 고 CPU + 고 throughput → macvlan
-        if cpu > 400 and throughput > 50:
-            return "macvlan"
-
-        # 소패킷 고빈도 → ipvlan
-        if pps > 10000 and throughput < 50:
-            return "ipvlan"
-
-        # 기본값: ipvlan (저오버헤드)
         return "ipvlan"
 
     def get_confidence(self, samples: list[dict]) -> float:
@@ -442,11 +460,16 @@ class NWDAFEngine:
         self.interval = args.interval
         self.window_size = args.window
         self.dry_run = args.dry_run
+        self.mode = args.mode
 
         self.collector = KPICollector()
         self.classifier = CNIClassifier(Path(args.model))
         self.executor = DRANETExecutor(dry_run=args.dry_run)
         self.logger = NWDAFLogger()
+
+        # rule-based 모드면 ML 모델 강제 비활성화
+        if self.mode == "rule-based":
+            self.classifier.model = None
 
         # 상태
         self.sample_buffer = []
@@ -461,7 +484,8 @@ class NWDAFEngine:
         print("═══════════════════════════════════════")
         print(f"  Interval:    {self.interval}s")
         print(f"  Window:      {self.window_size} samples")
-        print(f"  Model:       {'ML' if self.classifier.model else 'Rule-based'}")
+        print(f"  Mode:        {self.mode}")
+        print(f"  Model:       {'ML (predictive)' if self.classifier.model else 'Rule-based (reactive)'}")
         print(f"  Dry-run:     {self.dry_run}")
         print(f"  Current CNI: {self.executor.get_current_backend()}")
         print(f"  Log:         {self.logger.log_file}")
@@ -574,6 +598,8 @@ def parse_args():
                         help="판단에 사용할 샘플 윈도우 크기 (default: 5)")
     parser.add_argument("--model", type=str, default=str(DEFAULT_MODEL_PATH),
                         help="학습된 모델 경로 (default: model/nwdaf-classifier.pkl)")
+    parser.add_argument("--mode", type=str, default="ml", choices=["ml", "rule-based"],
+                        help="판단 모드: ml (ML 모델, predictive) 또는 rule-based (threshold, reactive)")
     parser.add_argument("--dry-run", action="store_true",
                         help="전환 실행 안 함 (판단만)")
     return parser.parse_args()

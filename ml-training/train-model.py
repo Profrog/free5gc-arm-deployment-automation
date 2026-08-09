@@ -45,7 +45,7 @@ except ImportError:
 # 설정
 # ═══════════════════════════════════════════════════════
 
-MODEL_OUTPUT = Path(__file__).parent / "model" / "nwdaf-classifier.pkl"
+MODEL_OUTPUT = Path(__file__).parent.parent / "nwdaf" / "model" / "nwdaf-classifier.pkl"
 FEATURES = ["throughput_mbps", "packet_loss_pct", "total_pps", "cpu_milli", "mem_mi"]
 LABELS = ["ipvlan", "macvlan"]
 

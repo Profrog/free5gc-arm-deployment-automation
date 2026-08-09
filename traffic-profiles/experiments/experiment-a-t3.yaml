@@ -1,7 +1,7 @@
-# experiment-a-t3.yaml — ipvlan 고정, 소→대 전환
+# experiment-a-t3.yaml — ipvlan 고정, 점진적 트래픽 증가
 ---
 metadata:
-  name: "A-T3: ipvlan Fixed + Small→Large"
+  name: "A-T3: ipvlan Fixed + Gradual Ramp-up"
   matrix_id: "A-T3"
 
 nwdaf:
@@ -11,21 +11,36 @@ cni:
   initial: "ipvlan"
 
 phases:
-  - name: "small_traffic"
-    traffic_pattern:
-      protocol: "udp"
-      direction: "uplink"
-      packet_size: 128
-      rate: "10Mbps"
-      duration: "120s"
-
-  - name: "large_traffic"
+  - name: "steady_low"
     traffic_pattern:
       protocol: "udp"
       direction: "downlink"
       packet_size: 1400
-      rate: "500Mbps"
-      duration: "120s"
+      rate: "10Mbps"
+      duration: "60s"
+
+  - name: "gradual_ramp"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate_steps:
+        - "30Mbps"
+        - "60Mbps"
+        - "100Mbps"
+        - "150Mbps"
+        - "200Mbps"
+        - "300Mbps"
+      step_duration: "30s"
+      duration: "180s"
+
+  - name: "steady_high"
+    traffic_pattern:
+      protocol: "udp"
+      direction: "downlink"
+      packet_size: 1400
+      rate: "300Mbps"
+      duration: "60s"
 
 measurement:
   monitor_interval: 5

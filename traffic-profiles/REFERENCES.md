@@ -1359,3 +1359,419 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 ### 논문 서술 예시
 
 > "NWDAF AnLF의 입력 feature는 3GPP TS 23.288에서 정의된 Network Performance 및 NF Load analytics의 KPI를 기반으로 선정하였다 [G]. throughput_mbps와 total_pps는 UPF 데이터플레인의 워크로드 특성을 반영하며, 이 두 값의 비율로 평균 패킷 크기가 암묵적으로 인코딩된다. packet_loss_pct는 현재 CNI backend의 성능 한계 도달을 감지하는 지표로 활용된다. cpu_milli와 mem_mi는 NF Load 관점의 시스템 부하 상태를 나타낸다. Feature 수를 5개로 제한함으로써 ARM64 환경에서의 추론 오버헤드를 최소화하고, RandomForest의 해석 가능성(feature importance)을 유지한다."
+
+---
+
+## [18] 표준 준수 범위와 확장 경계 (Standard Compliance Boundary)
+
+### 문제: "NWDAF가 CNI를 전환하는 게 3GPP 표준인가?"
+
+본 연구에서 가장 명확히 해야 할 부분은 **3GPP 표준 준수 범위**와 **본 연구의 확장 범위**의 경계이다.
+
+### 3GPP NWDAF (TS 23.288)가 정의하는 것
+
+| 항목 | 표준 정의 |
+|------|-----------|
+| Analytics ID | Network Performance, NF Load, QoS Sustainability, UE Mobility 등 |
+| 데이터 수집 경로 | NF Event Exposure, OAM, DCCF (OR 관계) |
+| ML 구조 | AnLF (추론), MTLF (학습) 분리 |
+| Analytics 소비자 | SMF, PCF, AMF, NEF |
+| 실행 동작 | PFCP session modification, QoS 정책 변경, 슬라이스 재선택 |
+
+### 3GPP NWDAF가 정의하지 않는 것 (unspecified)
+
+- 인프라 레이어 (CNI, 커널 네트워크 인터페이스) 제어
+- Kubernetes/컨테이너 오케스트레이션 연동
+- 물리/가상 NIC 수준의 경로 전환
+- Operator-specific analytics ID의 내용 (추가는 허용하나 내용 미규정)
+
+### 본 연구의 아키텍처: 2-Layer 분리
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Analytics Layer (3GPP TS 23.288 준수)                    │
+│                                                         │
+│  ┌───────────────┐      ┌────────────────────┐         │
+│  │ Data Collection│      │  AnLF (ML 판단)     │         │
+│  │ - OAM 경로     │─────→│  - RF Classifier   │         │
+│  │ - Network Perf │      │  - 입력: 5 KPI     │         │
+│  │   KPI 수집     │      │  - 출력: CNI 추천   │         │
+│  └───────────────┘      └────────┬───────────┘         │
+│                                  │ Analytics Output      │
+└──────────────────────────────────┼──────────────────────┘
+                                   │
+═══════════════════════════════════════════════════════════════
+          확장 경계 (Extension Boundary)
+═══════════════════════════════════════════════════════════════
+                                   │
+┌──────────────────────────────────┼──────────────────────┐
+│  Actuation Layer (본 연구 제안 — Operator-defined)        │
+│                                  ▼                      │
+│  ┌──────────────────────────────────────────────┐      │
+│  │  Infrastructure Actuator                      │      │
+│  │  - NWDAF analytics output 수신                │      │
+│  │  - CNI backend 전환 판단 → 실행               │      │
+│  │  - ip -batch (커널 레벨 IP 이동)              │      │
+│  │  - 전환 비용/이득 cost-benefit 평가           │      │
+│  └──────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 표준 적합성 논증
+
+| 예상 비판 | 방어 논리 | 근거 |
+|-----------|-----------|------|
+| "NWDAF가 CNI를 전환하라는 건 표준에 없다" | 맞다. 전환은 NWDAF가 아닌 Actuation Layer가 수행한다. NWDAF는 판단만 한다. | TS 23.288 §6.1: Analytics consumer가 analytics를 어떻게 활용할지는 consumer의 재량 |
+| "CNI 선택이라는 Analytics ID는 없다" | Operator-defined analytics로 정당화. 표준은 추가를 금지하지 않음. | TS 23.288 §6.2.1: "The list of Analytics IDs is not exhaustive" (vendor extension 허용) |
+| "이건 진짜 NWDAF인가?" | 상위 계층(데이터 수집, ML 판단)은 표준 구조 준수. 하위 계층은 명시적으로 확장으로 분리. | ETSI ZSM 002 §5.3: cross-domain closed-loop에서 actuation은 domain-specific |
+| "기존 NWDAF 연구와 뭐가 다른가?" | 기존 연구는 모두 control plane 내 실행(PFCP, 정책). 본 연구는 인프라 레이어까지 closed-loop 확장. | [F] Waterloo 2025: NWDAF→SMF→UPF (control plane only) |
+
+### 유사 설계 패턴 (Cross-layer Automation 선례)
+
+| 시스템 | 판단 (Analytics) | 실행 (Actuation) | 경계 |
+|--------|-----------------|-------------------|------|
+| 3GPP NWDAF + SMF | NWDAF AnLF | SMF (PFCP) | 표준 내 |
+| O-RAN Near-RT RIC | xApp (ML) | E2 Node (RAN 제어) | O-RAN 표준 내 |
+| ETSI ZSM | Cross-domain analytics | Domain-specific actuator | ZSM 002 정의 |
+| **본 연구** | **NWDAF AnLF (표준 구조)** | **Infra Actuator (커널 CNI 전환)** | **표준 + 확장** |
+
+### 핵심 참고 문헌
+
+#### [H] ETSI GS ZSM 002 — Zero-touch Network and Service Management; Reference Architecture
+- **출처**: ETSI ISG ZSM, v1.1.1, 2019
+- **URL**: https://www.etsi.org/deliver/etsi_gs/ZSM/001_099/002/
+- **핵심 내용**:
+  - Closed-loop automation: Data Collection → Analytics → Decision → Execution
+  - Cross-domain management: 한 도메인의 analytics가 다른 도메인의 actuation을 trigger
+  - Management Domain 간 경계에서 intent 기반 인터페이스 사용
+- **본 연구와의 관계**: NWDAF(5G domain) analytics → Infrastructure domain actuation은 ZSM의 cross-domain automation 패턴에 부합
+
+#### [I] O-RAN.WG2.AIML-v01.03 — AI/ML Workflow Description and Requirements
+- **출처**: O-RAN Alliance WG2, 2023
+- **URL**: https://www.o-ran.org/specifications
+- **핵심 내용**:
+  - Near-RT RIC xApp: ML 모델 추론 → E2 인터페이스로 RAN 제어
+  - ML model lifecycle: training → deployment → inference → monitoring
+  - Action은 RIC이 아닌 E2 Node가 수행 (판단과 실행 분리)
+- **본 연구와의 관계**: "판단은 analytics NF, 실행은 domain actuator" 패턴의 선례
+
+#### [J] 3GPP TS 23.288 §6.2.1 — Analytics ID 확장성
+- **출처**: 3GPP Release 19, 2024
+- **핵심 내용**:
+  - 표준 Analytics ID 목록은 normative하나 exhaustive하지 않음
+  - Operator/vendor가 추가 analytics를 정의할 수 있음 (TS 29.520 Nnwdaf API 확장)
+  - 단, 표준 inter-op을 위해서는 3GPP에 등록 필요 (본 연구는 단일 operator 범위)
+- **본 연구에서의 활용**: "CNI Optimization"을 operator-defined analytics로 위치시킴
+
+### 논문 서술 예시
+
+> "본 연구의 시스템 아키텍처는 두 계층으로 명시적으로 분리된다.
+> **Analytics Layer**는 3GPP TS 23.288의 NWDAF AnLF 구조를 따르며, OAM 경로로 수집된
+> Network Performance KPI(throughput, packet loss, PPS)와 NF Load(CPU, memory)를
+> 입력으로 Random Forest 분류 모델이 최적 CNI backend를 판단한다.
+> 이 계층의 데이터 수집, ML 추론 구조, analytics output 형식은 표준 아키텍처의 범위 내에 있다.
+>
+> **Actuation Layer**는 본 연구가 제안하는 확장으로, AnLF의 analytics output을 수신하여
+> 커널 수준의 네트워크 인터페이스 전환을 실행한다. 이는 3GPP가 규정하지 않는(unspecified)
+> 영역이며, ETSI ZSM의 cross-domain closed-loop automation [H]과 O-RAN Near-RT RIC의
+> xApp→E2 Node 패턴 [I]에서 공통적으로 나타나는 '판단-실행 분리(decision-actuation separation)'
+> 설계 원칙에 기반한다.
+>
+> 두 계층의 명시적 분리는 다음을 의미한다:
+> (1) Analytics Layer는 표준 NWDAF 구현에 그대로 적용 가능하며,
+> (2) Actuation Layer는 operator의 인프라 환경에 따라 독립적으로 교체/확장 가능하고,
+> (3) 본 연구의 contribution은 '이 cross-layer closed-loop이 실제로 UPF 성능 향상에
+> 유효한가'를 실험적으로 검증하는 것이다."
+
+### OCI 환경 특이사항 (실험 노트)
+
+본 실험 환경(OCI VM.Standard.A1.Flex)에서 확인된 제약:
+- **macvlan**: OCI VCN이 등록되지 않은 MAC 주소 패킷을 드롭 → Pod 간 외부 통신 불가
+- **ipvlan**: gtp5g 커널 모듈이 ipvlan 인터페이스 위에서 GTP netlink 디바이스 생성 불가
+- **해결**: OVS/Linux bridge를 중간에 두어 macvlan과 ipvlan 모두 bridge 위에 생성
+  → bridge의 MAC은 OCI에 등록된 VNIC MAC과 동일하게 설정하여 VCN 통과
+  → gtp5g는 macvlan(bridge 위) 인터페이스에 바인딩, IP 이동으로 ipvlan 경유 전환
+
+---
+
+## [19] NWDAF 표준 전환 대상 vs 본 연구 전환 대상 (Switching Target Comparison)
+
+### 핵심 질문
+
+> "3GPP NWDAF가 원래 전환(switching)하려는 대상은 무엇이고, 본 연구는 무엇을 전환하는가?"
+
+### 3GPP NWDAF의 표준 전환 대상 (Control Plane Level)
+
+NWDAF analytics를 소비하는 NF(SMF, PCF, AMF)가 실행하는 전환:
+
+| 전환 대상 | 실행 주체 | 메커니즘 | 계층 |
+|-----------|-----------|----------|------|
+| **UPF 재선택** | SMF | PFCP Session Establishment/Release | Control Plane |
+| **슬라이스 재선택** | AMF + NSSF | UE Configuration Update | Control Plane |
+| **QoS Flow 변경** | SMF + PCF | PCC Rule Update → PFCP QER | Control Plane |
+| **PDU Session 경로 변경** | SMF | PFCP Session Modification (UP Path Switch) | Control Plane |
+| **UE handover** | AMF | N2 Handover → GTP-U tunnel 재설정 | Control Plane |
+| **트래픽 steering** | PCF | PCC Rule (traffic influence) | Control Plane |
+
+**공통점**: 모두 **논리적 경로**의 전환이다. 물리 인프라는 변하지 않는다.
+
+### 본 연구의 전환 대상 (Infrastructure Level)
+
+| 전환 대상 | 실행 주체 | 메커니즘 | 계층 |
+|-----------|-----------|----------|------|
+| **CNI backend (macvlan ↔ ipvlan)** | Infrastructure Actuator | `ip -batch` (커널 IP 이동) | **Data Plane / Infrastructure** |
+
+### 차이의 본질
+
+```
+3GPP 표준 NWDAF:
+  "어떤 UPF를 쓸까?" / "어떤 슬라이스로 보낼까?" / "QoS를 얼마로 할까?"
+  → GTP 터널 endpoint, 정책 파라미터가 바뀜
+  → 패킷이 다른 논리적 경로로 흐름
+  → 물리 NIC, 커널 인터페이스는 그대로
+
+본 연구:
+  "같은 UPF에서, 같은 IP로, 패킷을 커널의 어떤 경로로 처리할까?"
+  → macvlan 경로: NIC → MAC 분기 → container (하드웨어 레벨 분리)
+  → ipvlan 경로: NIC → 커널 내부 IP 라우팅 → container (소프트웨어 레벨 분리)
+  → 논리적 세션(GTP-U, PFCP)은 불변
+  → 커널 패킷 처리 경로만 변경
+```
+
+### 계층 비교 (OSI 관점)
+
+```
+┌─────────────────────────────────────────────────┐
+│ Layer 7   Application (UPF process, GTP-U)      │  ← 양쪽 모두 불변
+├─────────────────────────────────────────────────┤
+│ Layer 4   Transport (UDP:2152 GTP-U)            │  ← 양쪽 모두 불변
+├─────────────────────────────────────────────────┤
+│ Layer 3   Network (IP: 10.10.3.1)              │  ← 양쪽 모두 불변
+├─────────────────────────────────────────────────┤
+│ Layer 2.5 Virtual NIC Driver                    │  ← ★ 본 연구가 전환하는 지점
+│           (macvlan: MAC-based / ipvlan: IP-based)│
+├─────────────────────────────────────────────────┤
+│ Layer 2   Data Link (Physical NIC)              │  ← 양쪽 모두 불변
+├─────────────────────────────────────────────────┤
+│ Layer 1   Physical                              │  ← 양쪽 모두 불변
+└─────────────────────────────────────────────────┘
+
+3GPP NWDAF 전환: Layer 3~4 (터널 endpoint IP, QoS marking)
+본 연구 전환:     Layer 2.5 (가상 NIC 드라이버의 패킷 분배 로직)
+```
+
+### 왜 이 차이가 중요한가 (연구 동기)
+
+| | 3GPP 표준 전환 | 본 연구 전환 |
+|---|---|---|
+| **전환 비용** | 높음 (PFCP 세션 재수립, 수백ms~수초) | 낮음 (~μs, IP 이동만) |
+| **세션 연속성** | 끊김 가능 (UPF 변경 시) | 유지 (IP, socket 불변) |
+| **전환 빈도** | 드묾 (분~시간 단위) | 잦음 가능 (초~분 단위) |
+| **전환 granularity** | 세션/UE 단위 | UPF 전체 (모든 세션 일괄) |
+| **성능 영향 요인** | 다른 UPF의 스펙, 위치, 부하 | 같은 UPF 내 커널 경로 효율 |
+
+**3GPP의 gap**: 표준은 "어떤 UPF를 쓸지"는 최적화하지만, "그 UPF 내부에서 패킷을 어떻게 처리할지"는 최적화하지 않는다. 본 연구는 이 **intra-UPF 최적화** gap을 채운다.
+
+### 상호 보완 관계 (경쟁이 아닌 보완)
+
+```
+Inter-UPF 최적화 (3GPP 표준):
+  NWDAF → "UPF-A보다 UPF-B가 낫다" → SMF가 세션 이동
+
+Intra-UPF 최적화 (본 연구):
+  NWDAF → "현재 트래픽에 macvlan이 낫다" → Actuator가 커널 경로 전환
+
+두 최적화는 직교(orthogonal):
+  - Inter-UPF: 어떤 노드에서 처리할지 (macro decision)
+  - Intra-UPF: 그 노드 안에서 어떻게 처리할지 (micro decision)
+  - 동시 적용 가능, 충돌 없음
+```
+
+### 논문에서의 서술 예시
+
+> "3GPP NWDAF의 기존 analytics 활용은 inter-UPF 최적화에 집중한다: SMF가 NWDAF의
+> Network Performance analytics를 소비하여 최적의 UPF를 선택하거나(TS 23.501 §6.3.3),
+> PDU Session의 UP 경로를 변경한다(TS 23.502 §4.3.5). 이는 control plane 수준의
+> 논리적 경로 전환으로, GTP-U 터널 endpoint과 PFCP 세션의 재수립을 수반한다.
+>
+> 본 연구는 이와 직교하는 **intra-UPF 최적화**를 제안한다. 동일 UPF 내에서
+> 커널의 패킷 처리 경로(macvlan vs ipvlan)를 트래픽 특성에 따라 동적으로 전환하며,
+> 이는 GTP-U/PFCP 세션을 유지한 채 data plane 수준에서 수행된다.
+> 전환 대상이 Layer 2.5(가상 NIC 드라이버)로 한정되므로, 상위 계층의 세션 상태에
+> 영향을 주지 않으며, 전환 비용은 기존 inter-UPF 전환(수백ms~수초) 대비
+> 3자릿수 이상 낮다(~μs).
+>
+> 이 두 최적화 차원은 상호 보완적이다: 3GPP 표준의 inter-UPF 최적화가
+> '어떤 노드에서 처리할지'를 결정한다면, 본 연구의 intra-UPF 최적화는
+> '그 노드 안에서 어떻게 처리할지'를 결정한다. 양자는 동시에 적용 가능하며
+> 충돌하지 않는다."
+
+### 참고 문헌 (추가)
+
+#### [K] 3GPP TS 23.501 §6.3.3 — UPF Selection and Reselection
+- **출처**: 3GPP Release 18, 2024
+- **내용**: SMF의 UPF 선택 기준 (위치, 부하, 능력, DNN/슬라이스 지원)
+- **본 연구와의 관계**: 표준의 inter-UPF 선택과 본 연구의 intra-UPF 최적화가 다른 계층임을 명시
+
+#### [L] 3GPP TS 23.502 §4.3.5 — UP Path Management
+- **출처**: 3GPP Release 18, 2024
+- **내용**: PDU Session의 User Plane 경로 변경 절차 (UP Path Switch, N9 forwarding)
+- **본 연구와의 관계**: 표준 UP 경로 전환은 터널/세션 수준, 본 연구는 커널 드라이버 수준
+
+#### [M] 3GPP TS 29.520 — Nnwdaf Services
+- **출처**: 3GPP Release 18, 2024
+- **내용**: NWDAF가 제공하는 analytics 서비스 API 정의
+- Analytics subscription/notification 절차
+- Analytics output의 소비자(SMF, PCF, AMF)별 활용 방식 정의
+- **본 연구와의 관계**: 표준 소비자는 control plane NF, 본 연구는 infrastructure actuator를 소비자로 확장
+
+---
+
+## [20] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
+
+### 핵심 논리
+
+> "어떤 UPF를 쓸지" 문제가 "그 UPF 안에서 패킷을 어떻게 처리할지" 문제로
+> 자연스럽게 확장될 수 있음을 보이는 선행연구 chain.
+
+### 논리 체인 (Gap 도출)
+
+```
+Step 1: UPF 선택이 성능에 영향을 준다 (Inter-UPF)
+  → [N] Dynamic UPF Selection, [O] Joint UPF Placement
+  → "어떤 UPF를 쓰느냐에 따라 latency, throughput이 달라진다"
+
+Step 2: 같은 UPF라도 내부 구현에 따라 성능이 크게 다르다 (Implementation)
+  → [P] Evaluation of UPF Implementations (INFOCOM 2024)
+  → [Q] s5uishida benchmark
+  → "go-upf vs VPP-UPF vs eUPF: 같은 기능인데 5배 성능 차이"
+
+Step 3: UPF 내부 패킷 처리 경로를 런타임에 바꿀 수 있다 (Intra-UPF path switching)
+  → [R] Run-Time Adaptive BPF/XDP for 5G UPF
+  → [S] HiP4-UPF (USENIX ATC'24)
+  → [T] Fastlane (IIT Bombay 2024)
+  → "같은 UPF 내에서도 처리 경로를 동적으로 전환 가능"
+
+Step 4: 그런데 이 전환을 트래픽 특성에 따라 자동으로 판단하는 시스템은 없다
+  → ★ 본 연구의 Gap
+  → "Step 1~3은 각각 존재하지만, NWDAF analytics로 Step 3을 자동화한 연구는 없다"
+```
+
+### 참고 문헌
+
+#### [N] Dynamic Energy-Efficient User Plane Function Selection in 5G Networks
+- **저자**: Bellin et al.
+- **출처**: IFIP Networking 2025
+- **URL**: https://networking.ifip.org/2025/images/Net25_papers/1571142002.pdf
+- **핵심 내용**:
+  - UPF 선택을 동적으로 수행하여 에너지 효율 최적화
+  - 선택 기준: real-time power consumption + latency/bandwidth requirements
+  - **시사점**: "어떤 UPF를 쓸지"를 동적으로 결정하는 연구는 활발하다.
+    그러나 "선택된 UPF 내부에서 어떻게 처리할지"는 고정으로 가정.
+- **본 연구와의 관계**: inter-UPF 최적화의 선행연구. 본 연구는 이를 intra-UPF로 확장.
+
+#### [O] Dynamic Selection of User Plane Function in 5G Environments
+- **저자**: [ONDM 2021]
+- **출처**: IFIP/IEEE ONDM 2021
+- **URL**: https://dl.ifip.org/db/conf/ondm/ondm2021/1570718826.pdf
+- **핵심 내용**:
+  - Evolutionary Game Theory 기반 UPF 선택 모델
+  - 서비스 지연 최소화를 위한 동적 UPF 할당
+  - **시사점**: UPF "선택"은 최적화 대상으로 인정되지만,
+    선택된 UPF의 내부 처리 메커니즘은 다루지 않음.
+
+#### [P] Evaluation of User Plane Function Implementations in Real-World 5G Networks
+- **저자**: Sokratis Christakis, Theodoros Tsourdinis, Nikos Makris, Thanasis Korakis, Serge Fdida
+- **출처**: IEEE INFOCOM 2024 Workshops
+- **URL**: https://www.researchgate.net/publication/383111414
+- **핵심 내용**:
+  - 실제 5G 환경에서 다양한 UPF 구현(kernel-based, DPDK, XDP) 성능 비교
+  - 같은 UPF 기능이라도 내부 구현 방식에 따라 throughput/latency가 크게 상이
+  - **시사점**: UPF 내부 패킷 처리 경로가 성능의 결정적 요인임을 실증.
+    "어떤 UPF를 쓸지"뿐 아니라 "어떤 처리 경로를 쓸지"가 중요함의 근거.
+- **본 연구와의 관계**: 처리 경로(macvlan vs ipvlan)에 따른 성능 차이가 최적화 가치가 있음의 직접 근거.
+
+#### [Q] Simple Measurement of UPF Performance (s5uishida)
+- **이미 [2]에서 인용** — go-upf(233Mbps) vs UPG-VPP(1.14Gbps) vs eUPF(359Mbps)
+- **시사점**: 같은 PFCP를 처리하는 UPF라도 데이터플레인 구현에 따라 5배 차이.
+  이는 내부 처리 경로 최적화의 가치를 직접 보여줌.
+
+#### [R] Run-Time Adaptive In-Kernel BPF/XDP Solution for 5G UPF
+- **저자**: Navarro do Amaral, T.A.; Rosa, R.V.; Moura, D.F.C.; Esteve Rothenberg, C.
+- **출처**: MDPI Electronics 2022, 11(7), 1022
+- **URL**: https://www.mdpi.com/2079-9292/11/7/1022
+- **핵심 내용**:
+  - UPF 내부에서 BPF 프로그램을 **런타임에** 교체하여 패킷 처리 로직 변경
+  - JIT 컴파일 오버헤드를 95% 감소시키는 설계로 빠른 적응(adaptation) 달성
+  - 10-11 Mpps 성능 유지하면서 런타임 경로 변경 가능
+  - **시사점**: UPF 내부 패킷 처리 경로의 **런타임 전환**이 기술적으로 가능함을 실증.
+    단, 이 논문은 "언제 전환할지"의 판단 로직(analytics)은 다루지 않음.
+- **본 연구와의 관계**: [R]은 "전환 가능성"을 보여주고, 본 연구는 "전환 판단 자동화"를 추가.
+  [R]의 actuation 기술 + 본 연구의 NWDAF analytics = 완전한 closed-loop.
+
+#### [S] HiP4-UPF: Towards High-Performance Comprehensive 5G User Plane Function on P4 Programmable Switches
+- **저자**: Wen et al.
+- **출처**: USENIX Annual Technical Conference (ATC'24), July 2024
+- **URL**: https://www.usenix.org/biblio-14562
+- **핵심 내용**:
+  - P4 프로그래머블 스위치에서 UPF 전체 기능 구현
+  - 기존 open-source UPF 대비 9-619% throughput 향상
+  - 패킷 처리 경로를 하드웨어 수준에서 최적화
+  - **시사점**: UPF 성능은 "어떤 하드웨어/소프트웨어 경로로 패킷을 처리하느냐"에
+    결정적으로 의존함을 Top-tier 학회에서 입증.
+    단, 이 논문도 "정적 배포" — 런타임 적응 전환은 다루지 않음.
+- **본 연구와의 관계**: 처리 경로 차이의 성능 영향이 수백% 수준임을 보여주는 상한 참조.
+
+#### [T] Fastlane: Porting Network Applications to Fast Packet I/O Frameworks
+- **저자**: IIT Bombay (Mythili Vutukuru 그룹)
+- **출처**: 2024
+- **URL**: https://www.cse.iitb.ac.in/~mythili/research/papers/2024-fastlane.pdf
+- **핵심 내용**:
+  - 네트워크 애플리케이션의 "fast path"와 "slow path"를 분리
+  - Fast path: DPDK/XDP 등 고속 I/O 경로
+  - Slow path: 전통적 커널 네트워크 스택
+  - 두 경로 간 **런타임 전환** 프레임워크 제공
+  - **시사점**: "같은 애플리케이션이 두 가지 패킷 처리 경로를 가지고,
+    상황에 따라 전환한다"는 개념의 일반화된 선행연구.
+- **본 연구와의 관계**: Fastlane의 "fast/slow path 전환" 개념을
+  5G UPF의 "macvlan/ipvlan 전환"으로 특수화. Fastlane은 범용 프레임워크,
+  본 연구는 5G-specific 적용 + NWDAF 기반 판단 자동화.
+
+### Gap Statement (논문에서의 활용)
+
+> "선행연구는 (1) 동적 UPF 선택(inter-UPF)[N][O], (2) UPF 구현 방식에 따른 성능 차이[P][Q][S],
+> (3) UPF 내부 패킷 처리 경로의 런타임 전환 가능성[R][T]을 각각 입증하였다.
+> 그러나 이 세 가지를 연결하여 — 트래픽 특성을 실시간 관측하고, 최적 처리 경로를
+> 자동으로 판단하며, 무중단으로 전환하는 — end-to-end closed-loop 시스템을
+> 구현한 연구는 존재하지 않는다.
+>
+> 특히, inter-UPF 선택[N][O]이 '어떤 노드를 쓸지'를 최적화한다면,
+> 본 연구는 그 다음 단계인 '선택된 노드 내부에서 어떤 커널 경로로 처리할지'를
+> 최적화하는 **intra-UPF 최적화**를 제안한다. 이는 inter-UPF 선택과 직교하며,
+> 기존 시스템에 추가적으로 적용하여 성능을 더 향상시킬 수 있다."
+
+### 시각적 정리: 선행연구 → 본 연구의 위치
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     선행연구 landscape                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [N][O] Inter-UPF Selection        [P][Q][S] UPF Impl. Comparison│
+│  "어떤 UPF?"                       "어떤 구현이 빠른가?"         │
+│       │                                  │                      │
+│       │                                  │                      │
+│       ▼                                  ▼                      │
+│  ┌─────────────────────────────────────────────┐               │
+│  │ [R][T] Runtime Path Switching 가능           │               │
+│  │ "패킷 처리 경로를 런타임에 바꿀 수 있다"      │               │
+│  └────────────────────┬────────────────────────┘               │
+│                       │                                         │
+│                       │ ← 판단 자동화 부재 (Gap)                 │
+│                       ▼                                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ★ 본 연구                                                      │
+│  NWDAF Analytics + Intra-UPF Path Switching                     │
+│  "언제, 어떤 경로로 전환할지를 자동 판단 + 무중단 실행"           │
+└─────────────────────────────────────────────────────────────────┘
+```

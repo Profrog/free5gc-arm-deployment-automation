@@ -5,7 +5,7 @@ nwdaf-engine.py — NWDAF AnLF Closed-Loop Engine
 3GPP TS 23.288 AnLF 최소 구현:
   1. OAM 경로로 KPI 수집 (kubectl top + /proc/net/dev)
   2. ML 모델로 최적 CNI backend 분류 (ipvlan vs macvlan)
-  3. DRANET ResourceClaim 변경으로 전환 실행
+  3. nwdaf-switch.sh로 커널 레벨 IP 이동 전환 실행
   4. 전환 전후 KPI 비교로 판단 정확성 검증
 
 사용법:
@@ -17,7 +17,7 @@ nwdaf-engine.py — NWDAF AnLF Closed-Loop Engine
 아키텍처:
     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
     │  Collector   │────>│  Classifier │────>│   Executor  │
-    │ (OAM 수집)  │     │  (ML 추론)  │     │ (DRANET)    │
+    │ (OAM 수집)  │     │  (ML 추론)  │     │ (IP 이동)   │
     └─────────────┘     └─────────────┘     └─────────────┘
            │                    │                    │
            └────────────────────┴────────────────────┘
@@ -44,7 +44,6 @@ import numpy as np
 # ═══════════════════════════════════════════════════════
 
 NAMESPACE = os.environ.get("NAMESPACE", "free5gc")
-CLAIM_NAME = os.environ.get("CLAIM_NAME", "upf-network")
 SWITCH_SCRIPT = Path(__file__).parent / "nwdaf-switch.sh"
 DEFAULT_MODEL_PATH = Path(__file__).parent / "model" / "nwdaf-classifier.pkl"
 LOG_DIR = Path(__file__).parent / "nwdaf-logs"
@@ -322,23 +321,24 @@ class CNIClassifier:
 # Executor: DRANET 전환 실행
 # ═══════════════════════════════════════════════════════
 
-class DRANETExecutor:
-    """nwdaf-switch.sh를 호출하여 DRANET ResourceClaim 변경"""
+class InfraExecutor:
+    """nwdaf-switch.sh를 호출하여 커널 레벨 IP 이동 전환 실행"""
 
     def __init__(self, switch_script: Path = SWITCH_SCRIPT, dry_run: bool = False):
         self.switch_script = switch_script
         self.dry_run = dry_run
 
     def get_current_backend(self) -> str:
-        """현재 CNI backend 조회"""
+        """현재 CNI backend 조회 (nwdaf-switch.sh status 파싱)"""
         result = subprocess.run(
-            ["kubectl", "get", "resourceclaim", CLAIM_NAME, "-n", NAMESPACE,
-             "-o", "jsonpath={.spec.devices.requests[0].deviceClassName}"],
+            [str(self.switch_script), "status"],
             capture_output=True, text=True, timeout=10
         )
-        if result.returncode == 0 and result.stdout.strip():
-            # "net-ipvlan" → "ipvlan"
-            return result.stdout.strip().replace("net-", "")
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                if "Current:" in line:
+                    # "  Current:  macvlan" → "macvlan"
+                    return line.split(":")[-1].strip()
         return "unknown"
 
     def switch(self, target: str) -> bool:
@@ -464,7 +464,7 @@ class NWDAFEngine:
 
         self.collector = KPICollector()
         self.classifier = CNIClassifier(Path(args.model))
-        self.executor = DRANETExecutor(dry_run=args.dry_run)
+        self.executor = InfraExecutor(dry_run=args.dry_run)
         self.logger = NWDAFLogger()
 
         # rule-based 모드면 ML 모델 강제 비활성화

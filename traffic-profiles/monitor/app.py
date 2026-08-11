@@ -174,45 +174,48 @@ tab_cpu, tab_mem, tab_loss, tab_anomaly, tab_summary, tab_compare = st.tabs(
 
 # ── CPU 탭 ──
 with tab_cpu:
-    st.subheader("Pod별 CPU 사용량 (millicores)")
+    st.subheader("UPF CPU 사용량 (millicores)")
 
     if pods:
         import pandas as pd
 
+        # 기본: UPF만 표시
         chart_data = {}
         for pod_name, data in pods.items():
-            resources = data["resources"]
-            if resources:
-                cpus = [r["cpu_milli"] for r in resources]
-                label = f"[{selected_run[:15]}] {pod_name[:20]}"
-                chart_data[label] = cpus
-
-        # Run 2 오버레이
-        if selected_run2:
-            _, _, _, pods2 = load_run_data(selected_run2)
-            for pod_name, data in pods2.items():
+            if "upf" in pod_name.lower():
                 resources = data["resources"]
                 if resources:
                     cpus = [r["cpu_milli"] for r in resources]
-                    label = f"[{selected_run2[:15]}] {pod_name[:20]}"
+                    label = f"[{selected_run[:15]}] {pod_name[:20]}"
                     chart_data[label] = cpus
 
+        # Run 2 오버레이 (UPF만)
+        if selected_run2:
+            _, _, _, pods2 = load_run_data(selected_run2)
+            for pod_name, data in pods2.items():
+                if "upf" in pod_name.lower():
+                    resources = data["resources"]
+                    if resources:
+                        cpus = [r["cpu_milli"] for r in resources]
+                        label = f"[{selected_run2[:15]}] {pod_name[:20]}"
+                        chart_data[label] = cpus
+
         if chart_data:
-            # 길이 맞추기
             max_len = max(len(v) for v in chart_data.values())
             for k in chart_data:
                 chart_data[k] = chart_data[k] + [None] * (max_len - len(chart_data[k]))
-
             df = pd.DataFrame(chart_data)
             st.line_chart(df, height=400)
 
-            # 선택한 Pod 상세
-            selected_pod = st.selectbox("Pod 상세 보기", list(pods.keys()), key="cpu_pod")
-            if selected_pod and pods[selected_pod]["resources"]:
-                res = pods[selected_pod]["resources"]
-                cpus = [r["cpu_milli"] for r in res]
-                st.line_chart(cpus, height=200)
-                st.caption(f"Mean: {sum(cpus)/len(cpus):.1f}m | Max: {max(cpus)}m | Samples: {len(cpus)}")
+        # Pod 상세 보기 (전체 Pod 선택 가능)
+        st.divider()
+        st.subheader("Pod 상세 보기")
+        selected_pod = st.selectbox("Pod 선택", list(pods.keys()), key="cpu_pod")
+        if selected_pod and pods[selected_pod]["resources"]:
+            res = pods[selected_pod]["resources"]
+            cpus = [r["cpu_milli"] for r in res]
+            st.line_chart(cpus, height=200)
+            st.caption(f"Mean: {sum(cpus)/len(cpus):.1f}m | Max: {max(cpus)}m | Samples: {len(cpus)}")
 
 # ── Memory 탭 ──
 with tab_mem:

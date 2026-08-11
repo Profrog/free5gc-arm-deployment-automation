@@ -168,6 +168,60 @@ Multus + ipvlan/macvlan → 5G data plane interfaces
 | cpu_milli | UPF CPU 사용량 |
 | mem_mi | UPF 메모리 사용량 |
 
+## Monitoring
+
+실험 중 UPF 및 전체 NF의 상태를 주기적으로 수집하여 격리 검증 및 성능 분석에 사용합니다.
+
+### 수집 항목
+
+| 카테고리 | 수집 대상 | 소스 | 출력 |
+|----------|----------|------|------|
+| 리소스 | CPU(milli), Memory(Mi) per Pod | `kubectl top pods` | `pods/{name}/resources.jsonl` |
+| 패킷 통계 | rx/tx packets, drop, loss% | `/proc/net/dev` (upfgtp, eth0) | `pods/{name}/packet_loss.jsonl` |
+| per-CPU | 코어별 busy/total ticks | `/proc/stat` | `system/per_cpu.jsonl` |
+| 이벤트 | CNI 전환 시점, from/to | nwdaf-switch.sh | `events.jsonl` |
+
+### 사용법
+
+```bash
+# 실험과 동시에 모니터링 시작 (5초 간격, 120초간)
+./traffic-profiles/monitor/monitor-collector.sh --interval 5 --duration 120
+
+# 백그라운드 실행
+./traffic-profiles/monitor/monitor-collector.sh --background
+
+# 중지
+./traffic-profiles/monitor/monitor-collector.sh --stop
+```
+
+### 출력 구조
+
+```
+monitor-data/run_20260811_041000/
+├── metadata.json              # 실험 조건 (interval, duration, k8s version)
+├── system/
+│   └── per_cpu.jsonl          # 코어별 사용량 시계열
+├── pods/
+│   ├── upf-xxx/
+│   │   ├── resources.jsonl    # CPU/Memory 시계열
+│   │   └── packet_loss.jsonl  # 패킷 통계 시계열
+│   └── ...
+└── events.jsonl               # CNI 전환 이벤트 마커
+```
+
+### 분석 도구
+
+| 도구 | 역할 |
+|------|------|
+| `monitor-visualize.py` | 시계열 그래프 생성 (throughput, loss, per-CPU) |
+| `monitor-detect.py` | 이상 탐지 (anomaly detection) |
+| `app.py` | 웹 대시보드 (실시간 모니터링) |
+
+### 격리 검증 용도
+
+- **per-CPU 시계열**: CPU 2,3(시스템 코어)이 실험 조건에 무관하게 flat → 격리 성공
+- **steal time**: 전 실험 구간에서 < 1% → 가상화 간섭 없음 확인
+
 ## Key Design Decisions
 
 | 결정 | 이유 |

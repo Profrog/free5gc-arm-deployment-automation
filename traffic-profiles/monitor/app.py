@@ -159,17 +159,16 @@ with col1:
     st.metric("🔌 CNI", metadata.get('cni', '?'))
 with col2:
     traffic = metadata.get('traffic', {})
-    st.metric("📶 Traffic", traffic.get('profile', '?'))
+    st.metric("📶 Traffic", traffic.get('profile', traffic.get('pattern', '?')))
 with col3:
     st.metric("⏱ Duration", f"{metadata.get('duration_sec', '?')}s")
 with col4:
-    st.metric("📊 Samples", metadata.get('total_samples', '?'))
+    # 트래픽 강도 범위 표시
+    desc = traffic.get('description', traffic.get('bandwidth', '?'))
+    st.metric("📊 Intensity", desc)
 with col5:
-    st.metric("🏗 Pods", metadata.get('pods_monitored', len(pods)))
-
-if metadata.get('traffic'):
-    t = metadata['traffic']
-    st.caption(f"Traffic: {t.get('protocol','?')} {t.get('bandwidth','?')} | Packet: {t.get('packet_size','?')} | Duration: {t.get('duration_sec','?')}s")
+    pkt = traffic.get('packet_size', '?')
+    st.metric("📦 Packet", pkt)
 
 # Run 2 정보
 if selected_run2:
@@ -180,17 +179,15 @@ if selected_run2:
         st.metric("🔌 CNI", metadata2.get('cni', '?'))
     with col2:
         traffic2 = metadata2.get('traffic', {})
-        st.metric("📶 Traffic", traffic2.get('profile', '?'))
+        st.metric("📶 Traffic", traffic2.get('profile', traffic2.get('pattern', '?')))
     with col3:
         st.metric("⏱ Duration", f"{metadata2.get('duration_sec', '?')}s")
     with col4:
-        st.metric("📊 Samples", metadata2.get('total_samples', '?'))
+        desc2 = traffic2.get('description', traffic2.get('bandwidth', '?'))
+        st.metric("📊 Intensity", desc2)
     with col5:
-        st.metric("🏗 Pods", metadata2.get('pods_monitored', '?'))
-
-    if metadata2.get('traffic'):
-        t2 = metadata2['traffic']
-        st.caption(f"Traffic: {t2.get('protocol','?')} {t2.get('bandwidth','?')} | Packet: {t2.get('packet_size','?')} | Duration: {t2.get('duration_sec','?')}s")
+        pkt2 = traffic2.get('packet_size', '?')
+        st.metric("📦 Packet", pkt2)
 
 st.divider()
 

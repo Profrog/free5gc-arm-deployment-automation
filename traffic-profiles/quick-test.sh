@@ -49,8 +49,8 @@ echo "════════════════════════�
 # 1. CNI 전환
 echo "[$(date '+%H:%M:%S')] Setting CNI: $CNI"
 "${SCRIPT_DIR}/../arm_k8s/nwdaf/nwdaf-switch.sh" "$CNI"
-echo "[$(date '+%H:%M:%S')] Waiting 10s for stabilization..."
-sleep 10
+echo "[$(date '+%H:%M:%S')] Waiting 30s for stabilization..."
+sleep 30
 
 # 2. 총 duration 계산
 if [[ "$MODE" == "profile" ]]; then

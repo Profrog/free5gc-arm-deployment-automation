@@ -372,15 +372,15 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 | CPU 특성 | per-packet overhead 낮음 | NIC offload(TSO/GRO) 활용 |
 | UE 수 | 다수 (MAC table 이슈 없음) | 소수 |
 
-근거: [IPVLAN — The Beginning (Bandewar/Google 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf), IETF draft-samizadeh-bmwg-cni-benchmarking-02 §4.1.3
+근거: [IPVLAN — The Beginning (Bandewar/Google 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf), [IETF draft-samizadeh-bmwg-cni-benchmarking-02 (2026)](https://datatracker.ietf.org/doc/draft-samizadeh-bmwg-cni-benchmarking/)
 
 ### 3GPP 트래픽 모델 → 프로파일 → CNI 매핑
 
 | 3GPP 서비스 | 트래픽 특성 | 대응 프로파일 | 적합 CNI |
 |------------|-----------|-------------|---------|
-| mMTC (TS 22.261 §7.2) | 소패킷(128B), burst, 다수 UE | `iot-burst.yaml` | ipvlan |
-| VoNR (TS 26.114) | 초소형(80B), 20ms 주기 | `vonr.yaml` | ipvlan |
-| eMBB (TR 38.913) | 대패킷(1400B), 500Mbps | `streaming-dl.yaml` | macvlan |
+| mMTC ([TS 22.261](https://www.3gpp.org/DynaReport/22261.htm) §7.2) | 소패킷(128B), burst, 다수 UE | `iot-burst.yaml` | ipvlan |
+| VoNR ([TS 26.114](https://www.3gpp.org/DynaReport/26114.htm)) | 초소형(80B), 20ms 주기 | `vonr.yaml` | ipvlan |
+| eMBB ([TR 38.913](https://www.3gpp.org/DynaReport/38913.htm)) | 대패킷(1400B), 500Mbps | `streaming-dl.yaml` | macvlan |
 
 ### 실험 시나리오 (T3: 소→대 전환)
 

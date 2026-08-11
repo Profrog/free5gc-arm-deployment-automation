@@ -1,0 +1,11 @@
+description: 50→400→50 (small pkt)
+name: spike-07
+packet_size: 128
+pattern: spike-return
+phases:
+- bandwidth: 50M
+  duration: 30
+- bandwidth: 400M
+  duration: 15
+- bandwidth: 50M
+  duration: 30

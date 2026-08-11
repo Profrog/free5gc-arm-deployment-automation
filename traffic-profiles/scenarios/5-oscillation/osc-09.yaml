@@ -1,0 +1,25 @@
+description: 200↔300 x5
+name: osc-09
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 300M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 300M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 300M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 300M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 300M
+  duration: 10

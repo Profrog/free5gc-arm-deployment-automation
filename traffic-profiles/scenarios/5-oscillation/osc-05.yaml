@@ -1,0 +1,21 @@
+description: 150↔350 x4
+name: osc-05
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 350M
+  duration: 12
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 350M
+  duration: 12
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 350M
+  duration: 12
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 350M
+  duration: 12

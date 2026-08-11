@@ -1,0 +1,21 @@
+description: 250↔400 x4
+name: osc-07
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 400M
+  duration: 12
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 400M
+  duration: 12
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 400M
+  duration: 12
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 400M
+  duration: 12

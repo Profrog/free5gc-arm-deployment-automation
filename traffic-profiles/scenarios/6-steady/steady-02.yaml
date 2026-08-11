@@ -1,0 +1,7 @@
+description: 100Mbps flat
+name: steady-02
+packet_size: 1400
+pattern: steady
+phases:
+- bandwidth: 100M
+  duration: 120

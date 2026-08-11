@@ -1,0 +1,25 @@
+description: 100↔200 x5 (small pkt)
+name: osc-08
+packet_size: 128
+pattern: oscillation
+phases:
+- bandwidth: 100M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 100M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 100M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 100M
+  duration: 10
+- bandwidth: 200M
+  duration: 10
+- bandwidth: 100M
+  duration: 10
+- bandwidth: 200M
+  duration: 10

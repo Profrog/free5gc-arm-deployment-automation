@@ -1,0 +1,9 @@
+description: 50→250 in 10s
+name: rapid-09
+packet_size: 1400
+pattern: rapid-rise
+phases:
+- bandwidth: 50M
+  duration: 10
+- bandwidth: 250M
+  duration: 20

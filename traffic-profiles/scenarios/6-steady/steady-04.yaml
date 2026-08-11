@@ -1,0 +1,7 @@
+description: 200Mbps flat
+name: steady-04
+packet_size: 1400
+pattern: steady
+phases:
+- bandwidth: 200M
+  duration: 120

@@ -1,0 +1,17 @@
+description: 150↔450 x3
+name: osc-10
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 150M
+  duration: 15
+- bandwidth: 450M
+  duration: 15
+- bandwidth: 150M
+  duration: 15
+- bandwidth: 450M
+  duration: 15
+- bandwidth: 150M
+  duration: 15
+- bandwidth: 450M
+  duration: 15

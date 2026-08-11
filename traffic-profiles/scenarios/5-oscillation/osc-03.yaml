@@ -1,0 +1,21 @@
+description: 200↔350 x4
+name: osc-03
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 350M
+  duration: 12
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 350M
+  duration: 12
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 350M
+  duration: 12
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 350M
+  duration: 12

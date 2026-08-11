@@ -1,0 +1,11 @@
+description: 100→400→100
+name: spike-03
+packet_size: 1400
+pattern: spike-return
+phases:
+- bandwidth: 100M
+  duration: 30
+- bandwidth: 400M
+  duration: 20
+- bandwidth: 100M
+  duration: 30

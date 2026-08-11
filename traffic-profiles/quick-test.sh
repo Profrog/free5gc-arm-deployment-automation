@@ -1,20 +1,48 @@
 #!/bin/bash
-# quick-test.sh — 모니터링 포함 빠른 baseline 테스트
-# Usage: ./quick-test.sh [macvlan|ipvlan] [duration_sec]
+# quick-test.sh — 프로파일 기반 baseline 테스트 (모니터링 자동 포함)
+#
+# Usage:
+#   ./quick-test.sh <cni> <profile_path>
+#   ./quick-test.sh macvlan scenarios/1-rapid-rise/rapid-01.yaml
+#   ./quick-test.sh ipvlan scenarios/6-steady/steady-08.yaml
+#
+# Legacy (프로파일 없이 고정 500M):
+#   ./quick-test.sh macvlan 60
 
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CNI="${1:-macvlan}"
-DURATION="${2:-60}"
+PROFILE="${2:-}"
 NAMESPACE="free5gc"
-RUN_ID="${CNI}_$(date +%Y%m%d_%H%M%S)"
+TARGET_IP="10.10.3.1"
+TARGET_PORT="5201"
+
+# 프로파일 모드 vs 레거시 모드 판별
+if [[ -f "$PROFILE" ]] || [[ -f "${SCRIPT_DIR}/${PROFILE}" ]]; then
+    # 프로파일 모드
+    [[ -f "$PROFILE" ]] || PROFILE="${SCRIPT_DIR}/${PROFILE}"
+    PROFILE_NAME=$(python3 -c "import yaml; print(yaml.safe_load(open('$PROFILE'))['name'])")
+    RUN_ID="${CNI}_${PROFILE_NAME}_$(date +%Y%m%d_%H%M%S)"
+    MODE="profile"
+else
+    # 레거시 모드 (고정 bandwidth + duration)
+    DURATION="${2:-60}"
+    RUN_ID="${CNI}_$(date +%Y%m%d_%H%M%S)"
+    MODE="legacy"
+fi
+
 MONITOR_DIR="${SCRIPT_DIR}/monitor-data/${RUN_ID}"
 
 echo "═══════════════════════════════════════"
 echo "  Quick Baseline Test"
 echo "  CNI: $CNI"
-echo "  Duration: ${DURATION}s"
+if [[ "$MODE" == "profile" ]]; then
+    echo "  Profile: $PROFILE"
+    echo "  Name: $PROFILE_NAME"
+else
+    echo "  Mode: legacy (500M, ${DURATION}s)"
+fi
 echo "  Run ID: $RUN_ID"
 echo "═══════════════════════════════════════"
 
@@ -24,35 +52,92 @@ echo "[$(date '+%H:%M:%S')] Setting CNI: $CNI"
 echo "[$(date '+%H:%M:%S')] Waiting 10s for stabilization..."
 sleep 10
 
-# 2. 모니터링 시작
-echo "[$(date '+%H:%M:%S')] Starting monitor..."
+# 2. 총 duration 계산
+if [[ "$MODE" == "profile" ]]; then
+    TOTAL_DURATION=$(python3 -c "
+import yaml
+p = yaml.safe_load(open('$PROFILE'))
+print(sum(ph['duration'] for ph in p['phases']))
+")
+else
+    TOTAL_DURATION="$DURATION"
+fi
+
+# 3. 모니터링 시작
+echo "[$(date '+%H:%M:%S')] Starting monitor (total: ${TOTAL_DURATION}s)..."
 "${SCRIPT_DIR}/monitor/monitor-collector.sh" \
     --interval 5 \
-    --duration $((DURATION + 10)) \
+    --duration $((TOTAL_DURATION + 10)) \
     --run-id "$RUN_ID" \
     --output-dir "$MONITOR_DIR" \
     --background
 
-# 2.1 트래픽 정보 기록
+# 3.1 metadata에 트래픽 정보 기록
+sleep 1
 python3 -c "
-import json
+import json, yaml
 m = '${MONITOR_DIR}/metadata.json'
 with open(m) as f: data = json.load(f)
 data['cni'] = '${CNI}'
-data['traffic'] = {'protocol':'UDP','bandwidth':'500Mbps','packet_size':'1400B','duration_sec':${DURATION},'profile':'large (T1)'}
-with open(m,'w') as f: json.dump(data, f, indent=2)
+if '${MODE}' == 'profile':
+    p = yaml.safe_load(open('${PROFILE}'))
+    data['traffic'] = {
+        'profile_name': p['name'],
+        'pattern': p['pattern'],
+        'description': p['description'],
+        'packet_size': str(p['packet_size']) + 'B',
+        'total_duration_sec': ${TOTAL_DURATION},
+        'phases': len(p['phases']),
+        'profile': p['pattern']
+    }
+else:
+    data['traffic'] = {
+        'protocol': 'UDP',
+        'bandwidth': '500Mbps',
+        'packet_size': '1400B',
+        'duration_sec': ${TOTAL_DURATION},
+        'profile': 'large (T1)'
+    }
+with open(m, 'w') as f: json.dump(data, f, indent=2)
 " 2>/dev/null || true
 
-# 3. iperf3 실행
-echo "[$(date '+%H:%M:%S')] Running iperf3 (UDP ${DURATION}s, 500M, 1400B)..."
-kubectl exec -n "$NAMESPACE" iperf3-n3 -- \
-    iperf3 -c 10.10.3.1 -p 5201 -u -b 500M -l 1400 -t "$DURATION" 2>&1 | tee "${MONITOR_DIR}/iperf3-result.txt"
+# 4. 트래픽 실행
+if [[ "$MODE" == "profile" ]]; then
+    echo "[$(date '+%H:%M:%S')] Running profile phases..."
+    python3 -c "
+import yaml, subprocess, sys
 
-# 4. 모니터링 종료
+p = yaml.safe_load(open('${PROFILE}'))
+pkt_size = p['packet_size']
+
+for i, phase in enumerate(p['phases']):
+    bw = phase['bandwidth']
+    dur = phase['duration']
+    print(f'  Phase {i+1}/{len(p[\"phases\"])}: {bw} for {dur}s (pkt={pkt_size}B)', flush=True)
+    cmd = [
+        'kubectl', 'exec', '-n', '${NAMESPACE}', 'iperf3-n3', '--',
+        'iperf3', '-c', '${TARGET_IP}', '-p', '${TARGET_PORT}',
+        '-u', '-b', bw, '-l', str(pkt_size), '-t', str(dur)
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    # 마지막 줄만 출력 (결과 요약)
+    lines = result.stdout.strip().split('\n')
+    for line in lines[-3:]:
+        if 'receiver' in line or 'sender' in line:
+            print(f'    {line.strip()}', flush=True)
+" 2>&1 | tee "${MONITOR_DIR}/iperf3-result.txt"
+else
+    echo "[$(date '+%H:%M:%S')] Running iperf3 (UDP ${TOTAL_DURATION}s, 500M, 1400B)..."
+    kubectl exec -n "$NAMESPACE" iperf3-n3 -- \
+        iperf3 -c "$TARGET_IP" -p "$TARGET_PORT" -u -b 500M -l 1400 -t "$TOTAL_DURATION" \
+        2>&1 | tee "${MONITOR_DIR}/iperf3-result.txt"
+fi
+
+# 5. 모니터링 종료
 echo "[$(date '+%H:%M:%S')] Stopping monitor..."
 "${SCRIPT_DIR}/monitor/monitor-collector.sh" --stop 2>/dev/null || true
 
-# 5. 결과 요약
+# 6. 결과 요약
 echo ""
 echo "═══════════════════════════════════════"
 echo "  Results: ${MONITOR_DIR}/"

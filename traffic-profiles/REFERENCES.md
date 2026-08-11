@@ -419,6 +419,26 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ---
 
+## [A11] ARM vs x86 아키텍처 차이와 네트워크 성능 영향
+
+> ARM 환경에서 커널 경로 차이에 따른 KPI 변화가 x86보다 크게 관측됨 → 실험 민감도 향상에 유리
+
+### 본 연구와의 관계
+- ARM에서 per-packet 처리 비용이 상대적으로 큼 → 커널 경로(macvlan vs ipvlan) 차이가 throughput에 더 크게 반영
+- 즉, ARM이 CNI 전환 효과를 관측하기에 **더 적합한 실험 플랫폼**
+
+### 참고 문헌
+
+| 논문 | 출처 | 핵심 결과 |
+|------|------|----------|
+| [ARM vs Intel Networking](https://netdevconf.org/0x17/docs/netdev-0x17-paper9-talk-slides/) | NetdevConf 0x17, 2023 | ARM이 per-packet latency에서 열세, 경로 차이 영향 증폭 |
+| [ARM vs x86 Performance](https://arxiv.org/abs/2604.18896) | arXiv 2026 | x86이 branch-heavy에서 빠름, ARM은 에너지 효율 5.8×↑ |
+| [x86/ARM Architecture Survey](https://www.researchgate.net/publication/362105591) | ResearchGate 2022 | 파이프라인, SIMD, 메모리 모델 차이 서베이 |
+| [ARM vs x86 Trends](https://www.researchgate.net/publication/353115679) | ResearchGate 2021 | ARM 기술 발전으로 성능 격차 축소 중 |
+| [Gem5 ARM/x86 Simulation](https://www.researchgate.net/publication/325978796) | ResearchGate 2018 | In-Order/Out-of-Order IPC 차이 정량 분석 |
+
+---
+
 # B. 본 연구의 설계 결정
 
 ---
@@ -787,26 +807,6 @@ UE (client) → gNB → UPF → N6 → DN Server (iperf3 server)
 - UPF의 N6(DN) 인터페이스에 별도 트래픽 서버 Pod 배치
 - 또는 외부 VPC/물리 서버에 iperf3 서버 구성
 - 이를 통해 UPF의 UL/DL 포워딩 비대칭성, NAT 오버헤드, DN 경로 latency 포함 측정 가능
-
----
-
-## [A11] ARM vs x86 아키텍처 차이와 네트워크 성능 영향
-
-> ARM 환경에서 커널 경로 차이에 따른 KPI 변화가 x86보다 크게 관측됨 → 실험 민감도 향상에 유리
-
-### 본 연구와의 관계
-- ARM에서 per-packet 처리 비용이 상대적으로 큼 → 커널 경로(macvlan vs ipvlan) 차이가 throughput에 더 크게 반영
-- 즉, ARM이 CNI 전환 효과를 관측하기에 **더 적합한 실험 플랫폼**
-
-### 참고 문헌
-
-| 논문 | 출처 | 핵심 결과 |
-|------|------|----------|
-| [ARM vs Intel Networking](https://netdevconf.org/0x17/docs/netdev-0x17-paper9-talk-slides/) | NetdevConf 0x17, 2023 | ARM이 per-packet latency에서 열세, 경로 차이 영향 증폭 |
-| [ARM vs x86 Performance](https://arxiv.org/abs/2604.18896) | arXiv 2026 | x86이 branch-heavy에서 빠름, ARM은 에너지 효율 5.8×↑ |
-| [x86/ARM Architecture Survey](https://www.researchgate.net/publication/362105591) | ResearchGate 2022 | 파이프라인, SIMD, 메모리 모델 차이 서베이 |
-| [ARM vs x86 Trends](https://www.researchgate.net/publication/353115679) | ResearchGate 2021 | ARM 기술 발전으로 성능 격차 축소 중 |
-| [Gem5 ARM/x86 Simulation](https://www.researchgate.net/publication/325978796) | ResearchGate 2018 | In-Order/Out-of-Order IPC 차이 정량 분석 |
 
 ---
 

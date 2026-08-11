@@ -307,6 +307,19 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - 기존 연구: NWDAF의 **분석/판단**까지만 구현 (실행은 수동 또는 NF 레벨)
 - 본 연구: NWDAF의 판단을 **인프라 레이어(커널 CNI 전환)까지 자동 실행**하고, 그 판단의 정확성을 검증
 
+### NWDAF 최소 구현의 정당성 (3GPP TS 23.288 §6.2A, Rel-17)
+
+AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으며, 부분 구현이 명시적으로 허용됨.
+
+| 기능 | 구현 여부 | 정당화 |
+|------|----------|--------|
+| AnLF — 데이터 수집 | ✅ | OAM 경유 (kubectl top + /proc/net/dev) |
+| AnLF — 분석/추론 | ✅ | ML 분류 모델 (Network Performance Analytics ID) |
+| AnLF — 결과 출력 → 전환 실행 | ✅ | nwdaf-switch.sh (ip -batch) |
+| MTLF — 모델 학습 | ✅ | offline 학습 (AnLF와 분리 배치 허용) |
+| Nnwdaf 서비스 인터페이스 | ❌ | 단일 시스템 내부 연동으로 단순화 |
+| 인프라 실행 (CNI 전환) | ✅ | 3GPP scope 밖, 표준 위반 아님, operator-specific |
+
 ---
 
 ## 표준 적합성 요약
@@ -397,71 +410,6 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 | packet sizes: 64B, 512B, 1500B | 64B (Phase 1), 128B (iot-burst), 1400B (streaming-dl) |
 | minimum 5 repetitions | ✅ 5회 반복 |
 | CPU/memory per CNI process | monitor-collector.sh에서 수집 |
-
----
-
-## [13] NWDAF 최소 구현의 정당성 — 3GPP Rel-17 기능 분리 구조
-
-> **핵심**: 3GPP TS 23.288 Rel-17에서 NWDAF의 AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으며, 부분 구현이 명시적으로 허용된다.
-
-### NWDAF 내부 구조 (TS 23.288 §6.2A, Rel-17)
-
-```
-NWDAF (단일 NF 또는 분리 배치)
-├── AnLF (Analytics Logical Function)
-│     - 데이터 수집 (OAM/NF로부터)
-│     - 분석/추론 실행 (학습된 모델 사용)
-│     - Analytics 결과 출력
-│
-├── MTLF (Model Training Logical Function)
-│     - 모델 학습 (학습 데이터 기반)
-│     - 학습된 모델을 AnLF에 제공
-│
-└── 서비스 인터페이스 (Nnwdaf)
-      - Nnwdaf_AnalyticsInfo (요청/응답형)
-      - Nnwdaf_EventsSubscription (구독/알림형)
-      - Nnwdaf_MLModelProvision (모델 제공)
-```
-
-### 3GPP 원문 근거
-
-**TS 23.288 §6.2A:**
-> "The NWDAF may be deployed as a single NF containing both AnLF and MTLF, or as separate NF instances for AnLF and MTLF."
-
-### 본 연구의 구현 범위
-
-| TS 23.288 기능 | 구현 여부 | 구현 방식 | 정당화 |
-|----------------|----------|----------|--------|
-| AnLF — 데이터 수집 | ✅ | kubectl top + /proc/net/dev → monitor-collector.sh | OAM 경유 수집 (표준 절차) |
-| AnLF — 분석/추론 | ✅ | sklearn ML 분류 모델 | Network Performance Analytics ID 해당 |
-| AnLF — 결과 출력 | ✅ | nwdaf-switch.sh 호출 (전환 신호) | Analytics output → action |
-| MTLF — 모델 학습 | ✅ | offline 학습 → 모델 파일 | AnLF와 분리 배치 허용 |
-| Nnwdaf 서비스 인터페이스 | ❌ | scope out | 단일 벤더 내부 연동 (외부 인터페이스 불필요) |
-| NRF 등록 | ❌ | scope out | 단일 클러스터 내 직접 연동 |
-| Consumer NF 연동 (PCF 등) | ❌ | scope out | NWDAF → DRANET 직접 연동으로 대체 |
-
-### NWDAF → DRANET 직접 연동의 정당성
-
-TS 23.288 §6.1.2에 따르면:
-- NWDAF는 analytics를 **제공**하는 역할
-- Analytics에 따른 **action은 consumer의 책임**
-- 3GPP는 "NWDAF가 직접 인프라를 변경하는 경로"를 **정의하지도, 금지하지도 않음**
-
-따라서 NWDAF가 DRANET을 직접 호출하는 것은:
-- 3GPP scope 밖 (인프라 레이어) ✅
-- 표준 위반 아님 ✅
-- Operator-specific implementation에 해당 ✅
-
-### Analytics ID 매핑
-
-| 본 연구 기능 | TS 23.288 Analytics ID | 비고 |
-|-------------|----------------------|------|
-| throughput/loss 기반 전환 판단 | Network Performance (Table 6.1.1) | NF별 성능 분석 |
-| KPI 이상 탐지 (monitor-detect.py) | Abnormal Behaviour | 임계값 초과 감지 |
-
-### 논문에서의 서술
-
-> "본 연구의 NWDAF는 TS 23.288 Rel-17의 AnLF에 해당하며, MTLF와의 분리 배치가 표준에서 명시적으로 허용된다(§6.2A). 서비스 인터페이스(Nnwdaf)는 본 연구 범위 밖으로, 단일 시스템 내부 연동으로 단순화하였다. NWDAF의 analytics 결과에 따른 실행(CNI 전환)은 3GPP가 규정하지 않는 인프라 레이어 동작이며, operator-specific implementation으로 정당화된다."
 
 ---
 

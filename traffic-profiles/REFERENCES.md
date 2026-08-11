@@ -277,7 +277,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **GitHub**: https://github.com/kubernetes-sigs/dranet
 
 ### 핵심 내용
-- Kubernetes DRA (Dynamic Resource Allocation)를 네트워크 디바이스에 적용
+- Kubernetes DRA (Dynamic Resource Allocation, v1.34 GA) 위에서 네트워크 디바이스를 관리
 - DeviceClass로 네트워크 인터페이스 추상화 (ipvlan, macvlan, SR-IOV, RDMA)
 - ResourceClaim 변경으로 **런타임에** 네트워크 백엔드 전환 가능
 - 기존 적용 대상: AI/ML workload의 RDMA 디바이스
@@ -290,23 +290,6 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **ipvlan/macvlan 서브인터페이스 생성 미지원**: DRANET은 SR-IOV, RDMA 등 하드웨어 디바이스 관리가 주 대상이며, 같은 master 위에 ipvlan↔macvlan을 동적 전환하는 기능 없음
 - **IP 변경 가능성**: ResourceClaim 변경 시 인터페이스가 재생성되어 IP가 바뀔 수 있음 → GTP-U/PFCP 세션 끊김 위험
 - **전환 시간**: ResourceClaim 변경 → DRANET reconcile → 인터페이스 재구성에 수 초 소요 (본 연구 ~140ms 대비 느림)
-
----
-
-## [9] Kubernetes Dynamic Resource Allocation (DRA)
-
-- **출처**: Kubernetes KEP-3063, KEP-4381
-- **URL**: https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/
-- **Status**: GA in Kubernetes v1.34 (2026)
-
-### 핵심 내용
-- 기존 Device Plugin의 한계 극복: 런타임 리소스 할당/해제
-- DeviceClass → ResourceClaim → ResourceSlice 계층 구조
-- Pod 실행 중 리소스 변경 가능 (기존 CNI는 Pod 생성 시점만)
-
-### 본 연구와의 관계
-- DRA가 GA된 시점(2026)과 본 연구 시점 일치 → 기술 성숙도 충분
-- DRANET이 DRA 위에서 네트워크 디바이스를 관리 → NWDAF 결정의 실행 기반
 
 ---
 

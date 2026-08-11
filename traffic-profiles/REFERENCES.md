@@ -173,14 +173,9 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **URL**: https://arxiv.org/abs/2605.28185
 
 ### 주요 결과
-| Slice | Load | p50 latency | p99 latency |
-|-------|------|-------------|-------------|
-| eMBB  | Light (10%) | ~300μs | 574μs |
-| eMBB  | Medium (50%) | ~600μs | ~900μs |
-| eMBB  | Heavy (90%) | ~800μs | 1,243μs |
-
-- UPF forwarding delay는 부하에 비례하여 증가
+- UPF forwarding delay는 부하에 비례하여 증가 (Light ~300μs → Heavy ~800μs)
 - PFCP session modification latency: <200μs (data-plane load 무관)
+- TC-BPF instrumentation으로 per-packet delay 정밀 측정 (28M pairs)
 
 ### 본 연구와의 관계
 - **부하 단계별 측정 패턴**: Light/Medium/Heavy → 본 프로젝트 `upf-stress.yaml` Phase 3 (stepped load 6단계)

@@ -361,77 +361,42 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ## [12] 트래픽 프로파일 ↔ CNI 적합성 매핑 근거
 
-> **핵심 논리**: "선행연구에 따르면 프로파일 A(소패킷 고빈도)에서는 ipvlan이 유리하고, 프로파일 B(대패킷 고throughput)에서는 macvlan이 유리하다. 따라서 A→B 전환 시 NWDAF가 macvlan을 선택하는 것이 올바르다."
+> NWDAF가 "ipvlan / macvlan 중 어느 것이 정답인가"를 판단할 때의 ground truth 정의.
 
-### 근거 1: CNI별 최적 workload 조건 (IETF BMWG + 실측)
+### ipvlan vs macvlan 적합 조건
 
-**출처**: IETF draft-samizadeh-bmwg-cni-benchmarking-02 (Apr 2026), §4.1.3:
-> "It is frequently observed that a CNI optimized for high-throughput TCP bulk traffic may perform suboptimally under UDP-heavy traffic, high pod churn, or policy-intensive workloads."
+| 조건 | ipvlan 유리 | macvlan 유리 |
+|------|------------|-------------|
+| 패킷 크기 | 소패킷 (64~256B) | 대패킷 (1400B+) |
+| 트래픽 패턴 | 고 PPS, burst | 고 throughput, sustained |
+| CPU 특성 | per-packet overhead 낮음 | NIC offload(TSO/GRO) 활용 |
+| UE 수 | 다수 (MAC table 이슈 없음) | 소수 |
 
-**출처**: MDPI Electronics 2024 (Dakic et al.):
-> "Certain CNIs are better suited for specific use cases, mainly when tuning our environment for smaller or larger network packets and workload types."
+근거: [IPVLAN — The Beginning (Bandewar/Google 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf), IETF draft-samizadeh-bmwg-cni-benchmarking-02 §4.1.3
 
-### 근거 2: ipvlan vs macvlan의 기술적 특성 → workload 적합성
+### 3GPP 트래픽 모델 → 프로파일 → CNI 매핑
 
-커널 메커니즘 차이([10-C1] Bandewar 2015)에서 도출:
+| 3GPP 서비스 | 트래픽 특성 | 대응 프로파일 | 적합 CNI |
+|------------|-----------|-------------|---------|
+| mMTC (TS 22.261 §7.2) | 소패킷(128B), burst, 다수 UE | `iot-burst.yaml` | ipvlan |
+| VoNR (TS 26.114) | 초소형(80B), 20ms 주기 | `vonr.yaml` | ipvlan |
+| eMBB (TR 38.913) | 대패킷(1400B), 500Mbps | `streaming-dl.yaml` | macvlan |
 
-| 특성 | ipvlan (L2) | macvlan (bridge) |
-|------|-------------|-----------------|
-| MAC 주소 | 호스트와 공유 | 독립 MAC 할당 |
-| 패킷 처리 경로 | 커널 내부 L3 routing | NIC 레벨 MAC filtering |
-| CPU 사용 패턴 | 패킷당 고정 overhead 낮음 | 패킷당 overhead 높지만 NIC offload 가능 |
-| **소패킷 고빈도 (high pps)** | ✅ 유리 — 커널 내부 처리가 빠름, per-packet CPU cost 낮음 | ❌ 불리 — MAC lookup overhead가 pps에 비례 |
-| **대패킷 고throughput** | ❌ 불리 — 커널 L3 경로에 CPU 병목 | ✅ 유리 — NIC offload(TSO/GRO), HW multiqueue 활용 |
-| **다수 UE (다수 인터페이스)** | ✅ 유리 — MAC table 이슈 없음 | ❌ 주의 — 스위치 MAC table 용량 제한 |
-
-### 근거 3: 3GPP 표준 트래픽 모델 → 프로파일 매핑
-
-| 3GPP 서비스 카테고리 | 표준 출처 | 트래픽 특성 | 대응 프로파일 | 예측 유리 CNI |
-|---------------------|-----------|------------|--------------|--------------|
-| **mMTC** (Massive IoT) | TS 22.261 §7.2, TR 38.913 | 소패킷(32~256B), 간헐적 burst, 다수 디바이스 | `iot-burst.yaml` (128B, 100pps, 20UE, burst) | **ipvlan** |
-| **VoNR** (Voice) | TS 22.261 §7.1, 5QI=1 | 초소형 패킷(60~80B), 20ms 주기, GBR | `vonr.yaml` (80B, 50pps, 10UE) | **ipvlan** |
-| **eMBB** (Enhanced Broadband) | TS 22.261 §7.1, TR 38.913 | 대패킷(1400B), 고throughput(100M~1Gbps) | `streaming-dl.yaml` (1400B, 500Mbps) | **macvlan** |
-| **UPF Stress** | 벤치마크 시나리오 | 대패킷, 양방향, 500Mbps+ | `upf-stress.yaml` Phase 2,3,4 | **macvlan** |
-
-### 실험 시나리오 설계: A→B 전환
+### 실험 시나리오 (T3: 소→대 전환)
 
 ```
-Phase 1 (ipvlan 적합):   iot-burst + vonr 동시 실행 (소패킷, 다수 UE, 낮은 throughput)
-         │
-         │ ← 트래픽 패턴 변화 (e.g., 스트리밍 세션 시작)
-         ▼
-Phase 2 (macvlan 적합):  streaming-dl 시작 (대패킷, 고throughput, 단일/소수 UE)
-         │
-         │ ← NWDAF 감지: "throughput 부족, packet loss 증가" → "macvlan로 전환"
-         ▼
-Phase 3 (전환 후):       동일 streaming-dl 계속 → KPI 개선 확인
+소패킷 구간 (ipvlan 적합) → 트래픽 변화 → 대패킷 구간 (macvlan 적합)
+                                    ↑
+                          NWDAF가 여기서 전환을 판단해야 함
 ```
 
-### 표준 근거 정리
+### 벤치마킹 방법론 준수 (IETF BMWG)
 
-| 프로파일 파라미터 | 값 | 표준 출처 |
-|-----------------|-----|----------|
-| eMBB DL target throughput | 100 Mbps (user experienced) | 3GPP TR 38.913 Table 7.1 |
-| eMBB packet delay budget | ≤10ms (5QI=9 → 300ms 허용이나 실질 목표) | 3GPP TS 23.501 Table 5.7.4-1 |
-| URLLC latency target | ≤1ms (user plane) | 3GPP TR 38.913 §7.1 |
-| mMTC device density | 1M devices/km² | 3GPP TR 38.913 §7.3 |
-| mMTC packet size | 32~256 bytes | 3GPP TR 37.868 (MTC traffic model) |
-| VoNR codec | AMR-WB 23.85kbps, 20ms frame | 3GPP TS 26.114, 5QI=1 |
-| VoNR packet size | ~60~80 bytes (RTP + AMR payload) | 3GPP TS 26.114 §7.4 |
-
-### IETF BMWG 방법론 준수
-
-| 요구사항 (draft-samizadeh-bmwg-cni-benchmarking-02) | 본 연구 대응 |
-|---------------------------------------------------|-------------|
-| "packet sizes: 64B, 512B, 1500B" (§4.1.1) | ✅ 64B (upf-stress P1), 128B (iot-burst), 1400B (streaming-dl) |
-| "TCP_RR, UDP_RR workloads" (§7.4) | ✅ UDP (all profiles), TCP (streaming-dl P2) |
-| "Short-lived TCP / Persistent streaming / Burst UDP" (§7.4) | ✅ vonr(short UDP), streaming-dl(persistent), iot-burst(burst) |
-| "minimum 5 repetitions" (§7.3) | ✅ 실험 프로토콜에 반영 필요 |
-| "CPU/memory per CNI process" (§4.1.3) | ✅ monitor-collector.sh에서 수집 |
-
-### 논문에서의 활용 (Experiment Design)
-
-> "실험 시나리오는 3GPP TR 38.913 및 TS 22.261에서 정의한 mMTC(소패킷, 간헐적 burst)와 eMBB(대패킷, 고throughput) 트래픽 모델에 기반한다. 선행연구[10-A1][10-A2][10-C1]에 따르면, 소패킷 고빈도 환경에서는 ipvlan의 커널 내부 처리가 유리하고, 대패킷 고throughput 환경에서는 macvlan의 NIC offload가 유리하다. IETF CNI 벤치마킹 방법론[BMWG-02]도 'CNI optimized for high-throughput bulk traffic may perform suboptimally under UDP-heavy traffic'임을 확인한다. 이에 따라 본 실험은 mMTC→eMBB 트래픽 전환 시 NWDAF가 ipvlan→macvlan 전환을 올바르게 판단하는지를 검증한다. 프로파일 파라미터(packet size, rate, burst pattern)는 3GPP 표준 값을 준수하며, 벤치마킹 방법론은 IETF BMWG draft-samizadeh-bmwg-cni-benchmarking-02의 절차를 따른다."
+| IETF 요구사항 | 본 연구 대응 |
+|--------------|-------------|
+| packet sizes: 64B, 512B, 1500B | 64B (Phase 1), 128B (iot-burst), 1400B (streaming-dl) |
+| minimum 5 repetitions | ✅ 5회 반복 |
+| CPU/memory per CNI process | monitor-collector.sh에서 수집 |
 
 ---
 

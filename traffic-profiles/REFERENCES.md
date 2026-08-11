@@ -635,6 +635,18 @@ free5GC Blog (2024.11):
 
 > "3GPP TS 23.288은 NWDAF 데이터 수집 경로로 NF Event Exposure, OAM, DCCF를 정의하며, 본 연구는 OAM 경로를 채택한다. 이는 (1) Nupf Event Exposure가 오픈소스 5GC(free5GC, Open5GS)에 미구현된 현실[survey2025], (2) Event Exposure 구현 시 UPF 성능 오버헤드(+0.11ms, +6.5% CPU)[waterloo2026]가 실험 결과를 왜곡할 수 있는 점, (3) OAM 방식이 학계 NWDAF 연구의 표준적 수집 방법인 점을 고려한 설계 선택이다. 수집 메트릭(throughput, packet loss, CPU/memory)은 TS 23.288 Network Performance Analytics ID의 입력 데이터와 동일하다."
 
+### Prometheus 미채택 근거
+
+| 항목 | Prometheus + Grafana | 본 연구 (경량 OAM) |
+|------|---------------------|-------------------|
+| 추가 Pod | 2~3개 (Prometheus, Grafana, node-exporter) | 0개 (bash 스크립트) |
+| CPU 오버헤드 | 상시 CPU 점유 | 수집 순간만 (무시 가능) |
+| 4vCPU 환경 적합성 | ❌ UPF와 경합 발생 | ✅ 경합 없음 |
+| 측정 왜곡 | ⚠️ 모니터링이 UPF 성능에 영향 | ✅ 측정과 피측정 분리 |
+| IETF BMWG 격리 원칙 | 위반 가능 | ✅ 준수 |
+
+> "단일 노드 4vCPU 환경에서 Prometheus+Grafana 스택을 추가하면 UPF와 리소스 경합이 발생하여 측정 결과를 왜곡한다. 본 연구는 IETF BMWG의 격리 원칙에 따라 경량 OAM 방식(kubectl top + /proc/net/dev)을 채택하여, 모니터링 시스템이 측정 대상에 영향을 주지 않도록 설계하였다."
+
 ---
 
 ## [B4] ML 설계 — 모델 선택 / Feature / 학습 전략

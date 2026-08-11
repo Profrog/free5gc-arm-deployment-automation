@@ -170,7 +170,14 @@ Multus + ipvlan/macvlan → 5G data plane interfaces
 
 ## Monitoring
 
-실험 중 UPF 및 전체 NF의 상태를 주기적으로 수집하여 격리 검증 및 성능 분석에 사용합니다.
+실험 중 UPF 및 전체 NF의 상태를 주기적으로 수집합니다.
+
+### 목적
+
+1. **NWDAF 입력 데이터 제공** — ML 모델이 전환 판단에 사용하는 KPI (throughput, loss, CPU)를 실시간 수집
+2. **전환 판단 검증** — CNI 전환 전후 KPI 비교로 NWDAF 판단의 정확성 평가
+3. **격리 유효성 증명** — per-CPU 시계열로 UPF 코어와 시스템 코어 간 간섭 없음을 확인
+4. **실험 재현성** — 실험 조건(K8s 버전, Pod 수, interval 등)을 metadata로 기록
 
 ### 수집 항목
 

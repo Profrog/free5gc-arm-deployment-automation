@@ -1214,59 +1214,51 @@ Intra-UPF 최적화 (본 연구):
 - **본 연구와의 관계**: 표준 소비자는 control plane NF, 본 연구는 infrastructure actuator를 소비자로 확장
 
 
-## [B10] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
+## [B10] Dual-Bridge 인프라 설계 근거
 
-### 계층 구조
+참조: [IPVLAN — The Beginning (Bandewar 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf), [Linux Kernel: netdevices](https://www.kernel.org/doc/html/latest/networking/netdevices.html), [iproute2 / netlink](https://man7.org/linux/man-pages/man7/netlink.7.html)
+
+### 문제: 커널 제약
+
+Linux 커널은 **같은 master 인터페이스에 macvlan과 ipvlan을 동시에 생성할 수 없다.**
 
 ```
-[유저스페이스]  UPF 프로세스 (go-upf) — bind("10.10.3.1")
-───────────────────────────────────────────────────────
-[커널]         socket
-                 ↓
-              ipvlan/macvlan (가상 인터페이스 드라이버)
-                 ↓
-              bridge (n3br / n3br-ipv)
-                 ↓
-              enp0s6 (NIC 디바이스 오브젝트 — 커널이 하드웨어를 추상화)
-───────────────────────────────────────────────────────
-[하드웨어]    물리 NIC 칩 (PCIe bus 0, slot 6)
+enp0s6 (물리 NIC)
+  ├── macvlan ← OK
+  └── ipvlan  ← ERROR: 같은 master에 공존 불가
 ```
 
-### enp0s6의 정체
+### 해결: Dual-Bridge + Veth Pair
 
-- **커널과 물리 NIC 하드웨어 간의 인터페이스** (추상화 계층)
-- 커널의 NIC 드라이버가 하드웨어 초기화 시 등록하는 네트워크 디바이스 오브젝트
-- 이름 규칙: `en`(ethernet) + `p0`(PCI bus 0) + `s6`(slot 6) — Predictable Network Interface Names (systemd)
-- ipvlan/macvlan은 이 디바이스를 `master`로 참조하여 커널 내부에 가상 인터페이스를 생성
+별도 bridge를 만들고 veth pair로 연결하여 같은 L2 도메인을 유지:
 
-### 본 프로젝트에서의 역할
+```
+n3br (bridge)                n3br-ipv (bridge)
+  │                              │
+  ├── macvlan: UPF n3            └── ipvlan: UPF n3i
+  ├── macvlan: gNB n3
+  │
+  └── veth-n3mac ──────────── veth-n3ipv  (같은 L2 도메인)
+```
+
+- macvlan은 n3br를 master로 생성
+- ipvlan은 n3br-ipv를 master로 생성
+- veth pair로 두 bridge를 연결 → 동일 L2 네트워크
+
+### 이게 B7(무중단 전환)의 전제 조건
+
+dual-bridge가 없으면 Pod 안에 macvlan(n3)과 ipvlan(n3i)이 동시에 존재할 수 없고, `ip addr del/add`로 IP를 옮기는 전환 자체가 불가능.
+
+### `ip addr del/add` 동작
+
+- 파일 수정이 아님 — 커널 메모리의 네트워크 자료구조를 직접 변경
+- 경로: `ip 명령 → netlink 소켓 → 커널 → 라우팅/인터페이스 상태 즉시 변경`
+- "이 IP로 오는 패킷을 이 인터페이스에서 수신하라"는 커널 등록 변경
+
+### 본 프로젝트의 물리 NIC
 
 ```json
 // NetworkAttachmentDefinition
 { "master": "enp0s6" }
+// enp0s6 = OCI A1.Flex의 물리 NIC (en + p0 + s6)
 ```
-
-"enp0s6의 커널 드라이버 위에 ipvlan/macvlan 서브인터페이스를 생성하겠다"는 선언.
-
-### `ip addr del/add`의 동작 레벨
-
-- 파일 수정이 아님 — 커널 메모리의 네트워크 자료구조를 직접 변경
-- 경로: `ip 명령 → netlink 소켓 → 커널 네트워크 서브시스템 → 라우팅/인터페이스 상태 변경`
-- 재부팅 시 사라짐 (비영속), 적용 즉각적 (마이크로초 단위)
-
-### `ip addr` vs `iptables` 차이
-
-| | `ip addr` | `iptables` |
-|--|-----------|-----------|
-| 역할 | 인터페이스에 IP 주소 할당 | 패킷 필터링/NAT |
-| 레이어 | L2/L3 경계 (어디서 수신할지) | L3/L4 (허용/차단/변환) |
-| 동작 시점 | 패킷 도착 전 — 수신 인터페이스 결정 | 패킷 도착 후 — 처리 규칙 적용 |
-
-본 프로젝트의 전환은 `ip addr`로 수행하며, iptables는 관여하지 않음.
-
-### 참고 문서
-
-- [Linux Kernel Networking — Network Device Naming](https://www.freedesktop.org/wiki/Software/systemd/PredictableNetworkInterfaceNames/) — systemd의 예측 가능한 인터페이스 이름 규칙
-- [Linux Kernel Documentation: netdevices](https://www.kernel.org/doc/html/latest/networking/netdevices.html) — 커널 네트워크 디바이스 구조
-- [iproute2 / netlink](https://man7.org/linux/man-pages/man7/netlink.7.html) — ip 명령이 커널과 통신하는 메커니즘
-- [IPVLAN — The Beginning (netdev 0.1, Bandewar/Google, 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf) — ipvlan이 master 인터페이스를 참조하는 구조 설명

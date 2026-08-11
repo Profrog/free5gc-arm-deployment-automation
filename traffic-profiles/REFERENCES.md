@@ -227,22 +227,9 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **비고**: DPDK 기반 상용 UPF. open-source UPF와 2~3 order of magnitude 차이.
 
 ### 본 연구와의 관계
-- **성능 상한 참조**: 상용 UPF(DPDK)의 성능을 upper bound로 제시하여, 오픈소스 커널 기반 UPF의 한계를 맥락화
+- **커널 경로가 병목임을 증명**: 동일 UPF 기능이라도 DPDK(커널 우회)로 948Gbps, 커널 기반으로 200~400Mbps → 성능 차이의 원인은 커널 네트워크 경로
+- **본 연구의 전제 정당화**: 커널 경로가 병목이므로, 커널 레벨에서 경로를 바꾸는 것(macvlan↔ipvlan 전환)이 KPI에 실질적 영향을 줌
 - **프로파일 차이**: 이 논문은 line rate 도달 여부만 확인 (pass/fail), 본 프로젝트는 부하 단계별 KPI 변화 추이를 관측 (성능 곡선)
-- **CNI 최적화의 당위성**: 커널 기반 UPF는 DPDK 대비 3자릿수 느림 → 커널 레벨에서의 최적화(CNI 전환)가 실질적 효과를 가짐
-
----
-
-## 프로파일 설계 근거
-
-`upf-stress.yaml`의 각 Phase가 위 레퍼런스에서 어떻게 도출되었는지:
-
-| Phase | 근거 |
-|-------|------|
-| Phase 1 (64B flood) | [1]의 per-packet delay가 pps에 비례 → 소패킷으로 pps 극대화하여 encap/decap 병목 관측 |
-| Phase 2 (1400B 500M) | [2]의 `iperf3 -u -b 500M` 동일 조건 재현. ARM64에서의 차이 비교 |
-| Phase 3 (stepped) | [1]의 light/medium/heavy 3단계 → 6단계로 세분화하여 loss 곡선 도출 |
-| Phase 4 (bidir) | [1]에서 N3→N6만 측정. 양방향 동시 부하는 미측정 → 추가 실험 |
 
 ---
 

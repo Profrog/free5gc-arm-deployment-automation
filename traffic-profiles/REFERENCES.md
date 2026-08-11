@@ -595,6 +595,8 @@ free5GC Blog (2024.11):
 
 ## [17] ML 모델 선택 근거 — Random Forest
 
+참조: [3GPP TS 23.288](https://www.3gpp.org/DynaReport/23288.htm), [Bayleyegn 2024 (NetSoft)](https://ieeexplore.ieee.org/document/10582517), [Ardestani 2025](https://arxiv.org/abs/2505.06789), [Breiman 2001 — Random Forests](https://link.springer.com/article/10.1023/A:1010933404324), [scikit-learn RandomForestClassifier](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
+
 ### 3GPP는 모델을 지정하지 않음
 
 TS 23.288은 **model-agnostic**:
@@ -658,6 +660,8 @@ Feature Importance (학습 결과):
 ---
 
 ## [18] 실험 격리 — CPU Pinning 및 검증
+
+참조: [Kubernetes CPU Manager](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/), [IETF draft-samizadeh-bmwg-cni-benchmarking-02 §7.3](https://datatracker.ietf.org/doc/draft-samizadeh-bmwg-cni-benchmarking/)
 
 ### 문제: 단일 노드에서의 리소스 경합
 
@@ -730,6 +734,8 @@ reservedSystemCPUs: "3"
 ---
 
 ## [19] ML 학습 전략 — Predictive 모델을 위한 시계열 패턴 기반 학습
+
+참조: [scikit-learn Pipeline](https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html), [3GPP TS 23.288 — Analytics Accuracy](https://www.3gpp.org/DynaReport/23288.htm)
 
 ### 핵심 설계: "현재 값이 아닌 추세(trend)를 학습"
 

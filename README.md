@@ -98,7 +98,7 @@ cd traffic-profiles
 # 단일 실험
 ./run.sh --experiment experiments/experiment-c-t3.yaml
 
-# 전체 매트릭스 (9개)
+# 전체 실험 매트릭스 (3×3 = 9개 조합)
 for f in experiments/experiment-*.yaml; do
     ./run.sh --experiment "$f"
 done

@@ -599,69 +599,68 @@ free5GC Blog (2024.11):
 
 ---
 
-## [B4] ML 모델 선택 근거 — Random Forest
+## [B4] ML 설계 — 모델 선택 / Feature / 학습 전략
 
-참조: [3GPP TS 23.288](https://www.3gpp.org/DynaReport/23288.htm), [Bayleyegn 2024 (NetSoft)](https://ieeexplore.ieee.org/document/10582517), [Ardestani 2025](https://arxiv.org/abs/2505.06789), [Breiman 2001 — Random Forests](https://link.springer.com/article/10.1023/A:1010933404324), [scikit-learn RandomForestClassifier](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
+참조: [3GPP TS 23.288](https://www.3gpp.org/DynaReport/23288.htm), [Bayleyegn 2024 (NetSoft)](https://ieeexplore.ieee.org/document/10582517), [Ardestani 2025](https://arxiv.org/abs/2505.06789), [Breiman 2001 — Random Forests](https://link.springer.com/article/10.1023/A:1010933404324), [scikit-learn](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
 
-### 3GPP는 모델을 지정하지 않음
+### 모델 선택: Random Forest
 
-TS 23.288은 **model-agnostic**:
-- 아키텍처(AnLF/MTLF)와 데이터 흐름만 정의
-- 특정 ML 알고리즘을 명시하거나 요구하지 않음
-- 알고리즘 선택은 구현자(operator/vendor)의 재량
-
-### 학계에서 사용된 NWDAF ML 모델 (서베이 23편 기준)
-
-| 모델 | 사용 논문 수 | 대표 논문 |
-|------|------------|----------|
-| LSTM | 6 | Manias 2022, Jeon 2024 |
-| **Random Forest** | **4** | **Bayleyegn 2024 (NetSoft)**, Abbas 2022 |
-| XGBoost/GBM | 3 | Abbas 2021 |
-| Decision Tree | 3 | Oliveira 2024 |
-| SVM | 2 | Mekrache 2023 |
-| MLP/CNN | 2 | Zhang 2024 |
-| LLM | 1 | Kan 2024 |
-
-### Random Forest 선택 이유
+3GPP TS 23.288은 model-agnostic (알고리즘 미지정, 구현자 재량).
 
 | 기준 | Random Forest | Deep Learning (LSTM 등) |
 |------|--------------|------------------------|
-| ARM64 추론 속도 | <1ms | 수십~수백ms (GPU 없이) |
+| ARM64 추론 속도 | <1ms | 수십~수백ms |
 | 학습 데이터 양 | 수백 샘플로 충분 | 수천~수만 필요 |
 | 해석 가능성 | feature importance 제공 | black box |
-| 5초 주기 판단 | ✅ 여유 | ⚠️ 빠듯할 수 있음 |
-| 논문 분석 가치 | "어떤 KPI가 판단에 가장 중요한가" | 해석 어려움 |
-| 학계 선례 | free5GC + RF [Bayleyegn 2024], NWDAF closed-loop + RF [Ardestani 2025] | 있지만 자원 제약 환경 부적합 |
+| 5초 주기 판단 | ✅ 여유 | ⚠️ 빠듯 |
+| 학계 선례 | Bayleyegn 2024, Ardestani 2025 | 자원 제약 환경 부적합 |
 
-### 본 연구 모델 상세
+### Feature 설계 (5개 기본 + 2개 추세)
+
+| Feature | 3GPP 근거 | 역할 |
+|---------|-----------|------|
+| `throughput_mbps` | Network Performance | 워크로드 구분 (importance: 0.65) |
+| `total_pps` | UPF volume measurement | 패킷 빈도 |
+| `packet_loss_pct` | Network Performance | CNI 한계 도달 감지 |
+| `cpu_milli` | NF Load | 시스템 부하 |
+| `mem_mi` | NF Load | 시스템 부하 |
+| `throughput_slope` | (파생) | ★ 상승 추세 — predictive 판단 핵심 |
+| `loss_delta` | (파생) | ★ loss 변화 방향 |
+
+비고: `throughput_mbps / total_pps`로 평균 패킷 크기가 암묵적으로 인코딩됨.
+
+### 학습 전략: Predictive (추세 기반)
 
 ```
-모델명: Random Forest Classifier (Breiman, 2001)
-구현: sklearn.ensemble.RandomForestClassifier
-Pipeline: StandardScaler → RandomForestClassifier
-
-하이퍼파라미터:
-  - n_estimators: 100 (트리 수)
-  - max_depth: 10 (과적합 방지)
-  - min_samples_split: 5
-  - random_state: 42 (재현성)
-
-입력 features (5차원):
-  [throughput_mbps, packet_loss_pct, total_pps, cpu_milli, mem_mi]
-
-출력: "ipvlan" 또는 "macvlan"
-
-Feature Importance (학습 결과):
-  throughput_mbps      0.6469  ← 가장 중요
-  total_pps            0.1289
-  mem_mi               0.1043
-  packet_loss_pct      0.0826
-  cpu_milli            0.0374
+Rule-based (reactive): loss > 5% → 전환 (이미 손실 발생 후)
+ML (predictive):       slope +20이면 30초 후 loss 예상 → 지금 전환 (손실 전)
 ```
 
-### 논문에서의 서술
+**학습 패턴 5종** (실험 패턴과 의도적으로 상이 → 일반화 검증):
 
-> "본 연구는 Random Forest Classifier[Breiman2001]를 NWDAF AnLF의 분류 모델로 채택한다. 3GPP TS 23.288은 특정 ML 알고리즘을 규정하지 않으며(model-agnostic), Random Forest는 NWDAF 학계 연구에서 가장 널리 사용되는 모델 중 하나이다[survey2025]. ARM64 자원 제약 환경에서의 추론 속도(<1ms), 5초 판단 주기에 대한 적합성, 그리고 feature importance를 통한 해석 가능성을 고려하여 선택하였다. 학습 결과, throughput(0.65)이 전환 판단의 가장 중요한 feature임이 확인되었으며, 이는 선행연구[SHS2023, MDPI2024]의 '대패킷 고throughput에서 macvlan 유리' 결론과 일치한다."
+| # | 패턴 | 학습 의도 |
+|---|------|----------|
+| 1 | 급상승 (30s에 10→300) | 빠른 전환 결정 |
+| 2 | 완상승 (300s에 10→300) | 여유 있는 판단 |
+| 3 | spike 후 복귀 | **전환 안 함** (false positive 방지) |
+| 4 | 계단식 | 정체 후 재상승 감지 |
+| 5 | 진동 (80↔120 반복) | **전환 안 함** (flapping 방지) |
+
+### 학습 결과
+
+```
+CV Accuracy: 90.1% ± 3.8% (5-fold)
+F1 (ipvlan): 0.96 | F1 (macvlan): 0.92
+
+Top Feature Importance:
+  throughput_mbps   0.30
+  cpu_milli         0.21
+  throughput_slope  0.14  ← ★ 추세 활용 확인
+  packet_loss_pct   0.14
+  loss_delta        0.11  ← ★ 변화 방향
+```
+
+핵심 발견: `throughput_slope`와 `loss_delta`가 유의미 → 모델이 "추세"를 판단에 활용함 확인 → Rule-based와의 차별점.
 
 ---
 
@@ -739,104 +738,9 @@ reservedSystemCPUs: "3"
 
 ---
 
-## [B6] ML 학습 전략 — Predictive 모델을 위한 시계열 패턴 기반 학습
-
-참조: [scikit-learn Pipeline](https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html), [3GPP TS 23.288 — Analytics Accuracy](https://www.3gpp.org/DynaReport/23288.htm)
-
-### 핵심 설계: "현재 값이 아닌 추세(trend)를 학습"
-
-```
-Rule-based (reactive):
-  입력: [throughput=200Mbps, loss=7%]
-  판단: "loss > 5% → 전환!" (이미 손실 발생 후)
-
-ML (predictive):
-  입력: [throughput=100Mbps, Δthroughput=+20, slope=+15, loss=0.5%, Δloss=+0.3]
-  판단: "이 추세면 30초 후 loss 발생 → 지금 전환" (손실 발생 전)
-```
-
-### Feature 설계 (7차원)
-
-| Feature | 의미 | predictive에 기여하는 이유 |
-|---------|------|--------------------------|
-| throughput_mbps | 현재 throughput | 기본 상태 |
-| **throughput_delta** | 직전 대비 변화량 | 올라가는 중인지 |
-| **throughput_slope** | window 기울기 | **상승 속도** (핵심) |
-| packet_loss_pct | 현재 loss | 이미 문제인지 |
-| **loss_delta** | loss 변화량 | loss가 커지는 중인지 |
-| cpu_milli | 현재 CPU | 부하 수준 |
-| cpu_delta | CPU 변화량 | CPU가 올라가는 중인지 |
-
-### 학습 패턴 (5종) — 실험 패턴과 의도적으로 상이
-
-| # | 패턴 | 학습 의도 | 실험과의 차이 |
-|---|------|----------|-------------|
-| 1 | 급상승 (30s에 10→300) | 빠른 전환 결정 | 실험은 180s ramp |
-| 2 | 완상승 (300s에 10→300) | 여유 있는 판단 | 실험은 180s ramp |
-| 3 | **spike 후 복귀** (10→200→10) | **전환 안 함** (false positive 방지) | 실험에 없음 |
-| 4 | 계단식 (10→100 유지→200) | 정체 후 재상승 감지 | 실험은 연속 상승 |
-| 5 | **진동** (80↔120 반복) | **전환 안 함** (flapping 방지) | 실험에 없음 |
-
-**학습 ≠ 실험**: 의도적으로 상이하게 설계하여 과적합 아닌 일반화(generalization) 검증.
-
-### 라벨링 기준
-
-```
-각 패턴의 switch_at 시점:
-  - switch_at 이전: label = "ipvlan" (아직 전환 불필요)
-  - switch_at 이후: label = "macvlan" (전환 필요)
-  - switch_at = None: 전부 "ipvlan" (전환하면 안 됨)
-
-switch_at 결정 근거:
-  → baseline 실험(A-T3)에서 ipvlan의 loss가 시작되는 throughput 지점
-  → 그 지점 "이전"에 전환하도록 라벨링 (predictive)
-```
-
-### 학습 결과
-
-```
-CV Accuracy: 90.1% ± 3.8% (5-fold)
-F1 (ipvlan): 0.96 | F1 (macvlan): 0.92
-
-Feature Importance:
-  throughput_mbps      0.30   ← 현재 상태
-  cpu_milli            0.21
-  throughput_slope     0.14   ← ★ 추세 (ML의 핵심 가치)
-  packet_loss_pct      0.14
-  loss_delta           0.11   ← ★ 변화 방향
-  throughput_delta     0.06
-  cpu_delta            0.04
-```
-
-**핵심 발견**: `throughput_slope`(0.14)와 `loss_delta`(0.11)가 유의미한 feature.
-→ 모델이 "현재 값"뿐 아니라 "변화 추세"를 판단에 활용함을 확인.
-→ Rule-based(현재 값만 봄)와의 차별점이 feature importance로 정량화됨.
-
-### 논문에서의 서술
-
-> "ML 모델의 학습 데이터는 5종의 트래픽 패턴(급상승, 완상승, spike 복귀, 계단식, 진동)으로 생성하며, 실험에 사용되는 패턴(180초 점진 증가)과 의도적으로 상이하게 설계하여 일반화 능력을 검증한다. Feature importance 분석 결과, throughput_slope(0.14)와 loss_delta(0.11)가 유의미한 판단 기준으로 활용되어, 모델이 현재 값의 threshold 비교가 아닌 시계열 추세를 기반으로 predictive 판단을 수행함을 확인하였다. 이는 rule-based 접근(threshold 초과 시 reactive 반응)이 제공할 수 없는 예측적 전환의 근거이다."
-
-### Rule-based와의 비교 논리
-
-```
-동일 시나리오 (100Mbps 구간):
-
-Rule-based:
-  throughput=100, loss=0.5%
-  → loss < 5%, throughput < 150 → "ipvlan 유지" (문제 없다고 판단)
-  → 30초 후 throughput=200, loss=12% → 그제야 전환 (이미 손실 누적)
-
-ML:
-  throughput=100, slope=+20, delta=+15, loss=0.5%, loss_delta=+0.3
-  → "slope +20이면 30초 후 160Mbps, loss 급증 예상" → 지금 전환
-  → 30초 후 throughput=200이지만 이미 macvlan → loss 0.5% 유지
-```
-
 ---
 
----
-
-## [B8] 실험 측정 범위 (Measurement Scope Limitation)
+## [B6] 실험 측정 범위 (Measurement Scope Limitation)
 
 ### 현재 테스트베드 구성
 
@@ -906,7 +810,7 @@ UE (client) → gNB → UPF → N6 → DN Server (iperf3 server)
 
 ---
 
-## [B10] 무중단 인터페이스 전환 메커니즘 (Zero-Downtime CNI Backend Switching)
+## [B7] 무중단 인터페이스 전환 메커니즘 (Zero-Downtime CNI Backend Switching)
 
 ### 핵심 원리
 
@@ -1033,51 +937,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## [B11] ML Feature 설계 근거 (NWDAF 입력 KPI 선정)
-
-### 선정된 Feature (5개)
-
-| Feature | 3GPP 근거 | 역할 |
-|---------|-----------|------|
-| `throughput_mbps` | TS 23.288 Network Performance (throughput UL/DL) | 대패킷/소패킷 워크로드 구분 |
-| `total_pps` | UPF EES volume measurement | 패킷 빈도 — 워크로드 특성 반영 |
-| `packet_loss_pct` | TS 23.288 Network Performance (packet loss) | 현재 인터페이스 한계 도달 감지 |
-| `cpu_milli` | TS 23.288 NF Load | 시스템 부하 상태 |
-| `mem_mi` | TS 23.288 NF Load | 시스템 부하 상태 |
-
-비고: `throughput_mbps / total_pps`로 평균 패킷 크기가 암묵적으로 인코딩됨. RandomForest가 이 비율 관계를 학습 가능.
-
-### 참고 문헌
-
-#### [F] Towards NWDAF-enabled Analytics and Closed-Loop Automation in 5G Networks
-
-- **저자**: Fatemeh Shafiei Ardestani, Niloy Saha, Noura Limam, Raouf Boutaba
-- **소속**: University of Waterloo
-- **출처**: arXiv:2505.06789, May 2025
-- **URL**: https://arxiv.org/abs/2505.06789
-- **주요 내용**:
-  - 3GPP 준수 NWDAF 구현 + UPF Event Exposure Service
-  - UPF EES에서 수집: volume measurement, throughput measurement (per-flow/per-session)
-  - ML 모델 입력: 그래프 기반 feature (indegree, outdegree, betweenness centrality)
-  - closed-loop 자동화: NWDAF → SMF → UPF (PDU session release)
-  - **본 연구와의 차이**: [F]는 보안(bot detection), 본 연구는 성능 최적화(CNI 전환)
-
-#### [G] 3GPP TS 23.288 — Architecture enhancements for 5G System to support network data analytics services
-
-- **출처**: 3GPP Release 19, 2024
-- **내용**: NWDAF Analytics ID별 입력/출력 정의
-  - Network Performance: throughput, packet delay, packet loss
-  - NF Load: CPU, memory
-  - UE Communication: volume, throughput, session duration
-  - AnLF/MTLF 분리 구조 정의
-
-### 논문 서술 예시
-
-> "NWDAF AnLF의 입력 feature는 3GPP TS 23.288에서 정의된 Network Performance 및 NF Load analytics의 KPI를 기반으로 선정하였다 [G]. throughput_mbps와 total_pps는 UPF 데이터플레인의 워크로드 특성을 반영하며, 이 두 값의 비율로 평균 패킷 크기가 암묵적으로 인코딩된다. packet_loss_pct는 현재 CNI backend의 성능 한계 도달을 감지하는 지표로 활용된다. cpu_milli와 mem_mi는 NF Load 관점의 시스템 부하 상태를 나타낸다. Feature 수를 5개로 제한함으로써 ARM64 환경에서의 추론 오버헤드를 최소화하고, RandomForest의 해석 가능성(feature importance)을 유지한다."
-
----
-
-## [B12] 표준 준수 범위와 확장 경계 (Standard Compliance Boundary)
+## [B8] 표준 준수 범위와 확장 경계 (Standard Compliance Boundary)
 
 ### 문제: "NWDAF가 CNI를 전환하는 게 3GPP 표준인가?"
 
@@ -1209,7 +1069,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## [B13] NWDAF 표준 전환 대상 vs 본 연구 전환 대상 (Switching Target Comparison)
+## [B9] NWDAF 표준 전환 대상 vs 본 연구 전환 대상 (Switching Target Comparison)
 
 ### 핵심 질문
 
@@ -1342,7 +1202,7 @@ Intra-UPF 최적화 (본 연구):
 
 ---
 
-## [B14] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
+## [B10] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
 
 ### 핵심 논리
 
@@ -1493,7 +1353,7 @@ Step 4: 그런데 이 전환을 트래픽 특성에 따라 자동으로 판단�
 
 ---
 
-## [B15] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
+## [B11] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
 
 ### 계층 구조
 

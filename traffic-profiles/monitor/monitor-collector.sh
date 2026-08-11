@@ -191,9 +191,18 @@ collect_packet_loss() {
         iface_stats=$(kubectl exec -n "$NAMESPACE" "$upf_pod" -c upf -- \
             cat /proc/net/dev 2>/dev/null) || continue
 
-        # upf1gtp 또는 upfgtp 인터페이스 찾기
+        # n3 또는 n3i 인터페이스 찾기 (실제 데이터플레인 트래픽 경로)
+        # 현재 활성 CNI에 따라 n3(macvlan) 또는 n3i(ipvlan)에 패킷이 흐름
         local gtp_line
-        gtp_line=$(echo "$iface_stats" | grep -E "upf.*gtp|gtp5g" | head -1)
+        gtp_line=$(echo "$iface_stats" | grep -E "^\s*(n3|n3i):" | head -1)
+        # n3이 트래픽 있으면 n3, 없으면 n3i
+        local n3_rx=$(echo "$iface_stats" | grep -E "^\s*n3:" | awk '{print $3}')
+        local n3i_rx=$(echo "$iface_stats" | grep -E "^\s*n3i:" | awk '{print $3}')
+        if [[ "${n3_rx:-0}" -gt "${n3i_rx:-0}" ]]; then
+            gtp_line=$(echo "$iface_stats" | grep -E "^\s*n3:" | head -1)
+        else
+            gtp_line=$(echo "$iface_stats" | grep -E "^\s*n3i:" | head -1)
+        fi
 
         if [[ -n "$gtp_line" ]]; then
             # /proc/net/dev format:

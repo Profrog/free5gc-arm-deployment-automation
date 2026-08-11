@@ -169,7 +169,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 | 11 | 왜 ARM? x86이 더 좋잖아 | ARM에서 경로 차이가 더 크게 관측됨 → 실험 민감도 향상 | A11 |
 | 12 | 표준 위반 아닌가? (NWDAF→인프라) | 3GPP scope 밖 = 위반 아님, operator-specific implementation | B8, B9 |
 | 13 | 전환 중 패킷 drop은? | ip -batch로 μs 단위 gap, cost-benefit으로 정량화 | B7 |
-| 14 | 기존 연구와 뭐가 다른가? | 기존은 판단까지, 본 연구는 인프라 실행 + 무중단 + 검증 | A8, A12 |
+| 14 | 기존 연구와 뭐가 다른가? | 기존 NWDAF 연구는 실행 없음, 기존 전환 연구는 ML 판단 없음 — 본 연구만 양쪽 결합 (ML 판단 + 무중단 실행 + 검증) | A8, A12 |
 
 ---
 

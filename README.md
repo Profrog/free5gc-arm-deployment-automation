@@ -114,6 +114,16 @@ done
 ./arm_k8s/nwdaf/nwdaf-switch.sh status   # 현재 상태 확인
 ```
 
+### 5. 모니터링
+
+```bash
+# 실험과 동시에 수집 (5초 간격, 백그라운드)
+./traffic-profiles/monitor/monitor-collector.sh --interval 5 --background
+
+# 중지
+./traffic-profiles/monitor/monitor-collector.sh --stop
+```
+
 ## Experiment Matrix
 
 ```
@@ -170,14 +180,11 @@ Multus + ipvlan/macvlan → 5G data plane interfaces
 
 ## Monitoring
 
-실험 중 UPF 및 전체 NF의 상태를 주기적으로 수집합니다.
-
 ### 목적
 
 1. **NWDAF 입력 데이터 제공** — ML 모델이 전환 판단에 사용하는 KPI (throughput, loss, CPU)를 실시간 수집
 2. **전환 판단 검증** — CNI 전환 전후 KPI 비교로 NWDAF 판단의 정확성 평가
-3. **격리 유효성 증명** — per-CPU 시계열로 UPF 코어와 시스템 코어 간 간섭 없음을 확인
-4. **실험 재현성** — 실험 조건(K8s 버전, Pod 수, interval 등)을 metadata로 기록
+3. **격리 유효성 + 실험 재현성** — per-CPU 시계열로 코어 간 간섭 없음 확인, 실험 조건을 metadata로 기록
 
 ### 수집 항목
 
@@ -187,19 +194,6 @@ Multus + ipvlan/macvlan → 5G data plane interfaces
 | 패킷 통계 | rx/tx packets, drop, loss% | `/proc/net/dev` (upfgtp, eth0) | `pods/{name}/packet_loss.jsonl` |
 | per-CPU | 코어별 busy/total ticks | `/proc/stat` | `system/per_cpu.jsonl` |
 | 이벤트 | CNI 전환 시점, from/to | nwdaf-switch.sh | `events.jsonl` |
-
-### 사용법
-
-```bash
-# 실험과 동시에 모니터링 시작 (5초 간격, 120초간)
-./traffic-profiles/monitor/monitor-collector.sh --interval 5 --duration 120
-
-# 백그라운드 실행
-./traffic-profiles/monitor/monitor-collector.sh --background
-
-# 중지
-./traffic-profiles/monitor/monitor-collector.sh --stop
-```
 
 ### 출력 구조
 
@@ -224,7 +218,7 @@ monitor-data/run_20260811_041000/
 | `monitor-detect.py` | 이상 탐지 (anomaly detection) |
 | `app.py` | 웹 대시보드 (실시간 모니터링) |
 
-### 격리 검증 용도
+### 격리 검증
 
 - **per-CPU 시계열**: CPU 2,3(시스템 코어)이 실험 조건에 무관하게 flat → 격리 성공
 - **steal time**: 전 실험 구간에서 < 1% → 가상화 간섭 없음 확인

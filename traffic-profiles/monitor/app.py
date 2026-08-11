@@ -156,8 +156,8 @@ with col4:
 st.divider()
 
 # ── 탭 구성 ──
-tab_cpu, tab_mem, tab_loss, tab_anomaly, tab_summary = st.tabs(
-    ["📈 CPU", "💾 Memory", "📉 Packet Loss", "⚠️ Anomalies", "📋 Summary"]
+tab_cpu, tab_mem, tab_loss, tab_anomaly, tab_summary, tab_compare = st.tabs(
+    ["📈 CPU", "💾 Memory", "📉 Packet Loss", "⚠️ Anomalies", "📋 Summary", "🔀 Compare"]
 )
 
 # ── CPU 탭 ──
@@ -293,5 +293,103 @@ with tab_summary:
 
 # ── 하단 ──
 st.divider()
+
+# ── Compare 탭 ──
+with tab_compare:
+    st.subheader("🔀 Run 간 비교")
+    st.caption("두 개 이상의 Run을 선택하여 동일 그래프에서 KPI를 비교합니다.")
+
+    compare_runs = st.multiselect("비교할 Run 선택", runs, default=[selected_run] if runs else [])
+
+    if len(compare_runs) < 2:
+        st.info("2개 이상의 Run을 선택하세요.")
+    else:
+        import pandas as pd
+
+        # CPU 비교
+        st.markdown("### CPU 사용량 비교 (UPF)")
+        cpu_compare = {}
+        for run_id in compare_runs:
+            _, _, _, run_pods = load_run_data(run_id)
+            for pod_name, data in run_pods.items():
+                if "upf" in pod_name.lower() and data["resources"]:
+                    cpus = [r["cpu_milli"] for r in data["resources"]]
+                    label = f"{run_id[:30]}"
+                    cpu_compare[label] = cpus
+                    break
+
+        if cpu_compare:
+            max_len = max(len(v) for v in cpu_compare.values())
+            for k in cpu_compare:
+                cpu_compare[k] = cpu_compare[k] + [None] * (max_len - len(cpu_compare[k]))
+            df = pd.DataFrame(cpu_compare)
+            st.line_chart(df, height=400)
+        else:
+            st.warning("UPF CPU 데이터 없음")
+
+        # Packet Loss 비교
+        st.markdown("### Packet Loss 비교 (UPF)")
+        loss_compare = {}
+        for run_id in compare_runs:
+            _, _, _, run_pods = load_run_data(run_id)
+            for pod_name, data in run_pods.items():
+                if "upf" in pod_name.lower() and data["packet_loss"]:
+                    losses = [r.get("loss_pct", 0) for r in data["packet_loss"]]
+                    label = f"{run_id[:30]}"
+                    loss_compare[label] = losses
+                    break
+
+        if loss_compare:
+            max_len = max(len(v) for v in loss_compare.values())
+            for k in loss_compare:
+                loss_compare[k] = loss_compare[k] + [None] * (max_len - len(loss_compare[k]))
+            df = pd.DataFrame(loss_compare)
+            st.line_chart(df, height=400)
+        else:
+            st.warning("UPF Packet Loss 데이터 없음")
+
+        # Memory 비교
+        st.markdown("### Memory 비교 (UPF)")
+        mem_compare = {}
+        for run_id in compare_runs:
+            _, _, _, run_pods = load_run_data(run_id)
+            for pod_name, data in run_pods.items():
+                if "upf" in pod_name.lower() and data["resources"]:
+                    mems = [r["mem_mi"] for r in data["resources"]]
+                    label = f"{run_id[:30]}"
+                    mem_compare[label] = mems
+                    break
+
+        if mem_compare:
+            max_len = max(len(v) for v in mem_compare.values())
+            for k in mem_compare:
+                mem_compare[k] = mem_compare[k] + [None] * (max_len - len(mem_compare[k]))
+            df = pd.DataFrame(mem_compare)
+            st.line_chart(df, height=400)
+        else:
+            st.warning("UPF Memory 데이터 없음")
+
+        # 요약 테이블
+        st.markdown("### 요약 비교")
+        summary_rows = []
+        for run_id in compare_runs:
+            _, _, _, run_pods = load_run_data(run_id)
+            for pod_name, data in run_pods.items():
+                if "upf" in pod_name.lower():
+                    row = {"Run": run_id[:30]}
+                    if data["resources"]:
+                        cpus = [r["cpu_milli"] for r in data["resources"]]
+                        row["CPU Mean (m)"] = round(sum(cpus) / len(cpus), 1)
+                        row["CPU Max (m)"] = max(cpus)
+                    if data["packet_loss"]:
+                        losses = [r.get("loss_pct", 0) for r in data["packet_loss"]]
+                        row["Loss Mean (%)"] = round(sum(losses) / len(losses), 4)
+                        row["Loss Max (%)"] = round(max(losses), 4)
+                    summary_rows.append(row)
+                    break
+
+        if summary_rows:
+            st.dataframe(summary_rows, use_container_width=True)
+
 st.caption(f"Monitor Data: `{MONITOR_DATA_DIR}/{selected_run}/` | "
            f"Server: 152.69.227.31:8501")

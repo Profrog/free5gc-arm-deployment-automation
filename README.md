@@ -114,6 +114,16 @@ done
 ./arm_k8s/nwdaf/nwdaf-switch.sh status   # 현재 상태 확인
 ```
 
+### 5. 모니터링
+
+```bash
+# 실험과 동시에 수집 (5초 간격, 백그라운드)
+./traffic-profiles/monitor/monitor-collector.sh --interval 5 --background
+
+# 중지
+./traffic-profiles/monitor/monitor-collector.sh --stop
+```
+
 ## Experiment Matrix
 
 ```
@@ -167,6 +177,64 @@ Multus + ipvlan/macvlan → 5G data plane interfaces
 | packet_loss_pct | 패킷 손실률 — 현재 CNI 한계 감지 |
 | cpu_milli | UPF CPU 사용량 |
 | mem_mi | UPF 메모리 사용량 |
+
+## Monitoring
+
+### 목적
+
+1. **NWDAF 입력 데이터 제공** — ML 모델이 전환 판단에 사용하는 KPI (throughput, loss, CPU)를 실시간 수집
+2. **전환 판단 검증** — CNI 전환 전후 KPI 비교로 NWDAF 판단의 정확성 평가
+3. **격리 유효성 + 실험 재현성** — per-CPU 시계열로 코어 간 간섭 없음 확인, 실험 조건을 metadata로 기록
+
+### 수집 항목
+
+| 카테고리 | 수집 대상 | 소스 | 출력 |
+|----------|----------|------|------|
+| 리소스 | CPU(milli), Memory(Mi) per Pod | `kubectl top pods` | `pods/{name}/resources.jsonl` |
+| 패킷 통계 | rx/tx packets, drop, loss% | `/proc/net/dev` (upfgtp, eth0) | `pods/{name}/packet_loss.jsonl` |
+| per-CPU | 코어별 busy/total ticks | `/proc/stat` | `system/per_cpu.jsonl` |
+| 이벤트 | CNI 전환 시점, from/to | nwdaf-switch.sh | `events.jsonl` |
+
+### 출력 구조
+
+```
+monitor-data/run_20260811_041000/
+├── metadata.json              # 실험 조건 (interval, duration, k8s version)
+├── system/
+│   └── per_cpu.jsonl          # 코어별 사용량 시계열
+├── pods/
+│   ├── upf-xxx/
+│   │   ├── resources.jsonl    # CPU/Memory 시계열
+│   │   └── packet_loss.jsonl  # 패킷 통계 시계열
+│   └── ...
+└── events.jsonl               # CNI 전환 이벤트 마커
+```
+
+### 분석 도구
+
+| 도구 | 역할 |
+|------|------|
+| `monitor-visualize.py` | 시계열 그래프 생성 (throughput, loss, per-CPU) |
+| `monitor-detect.py` | 이상 탐지 (anomaly detection) |
+| `app.py` | Streamlit 웹 대시보드 (수집 결과 시각화) |
+
+```bash
+# 대시보드 실행 (수집 완료 후)
+cd traffic-profiles/monitor
+streamlit run app.py --server.port 8501
+# → http://<서버IP>:8501 에서 확인
+```
+
+대시보드 기능:
+- Pod별 CPU/Memory 시계열 차트
+- UPF Packet Loss 추이
+- Anomaly Detection 결과 오버레이
+- Run 간 비교 (A-T1 vs B-T1 등)
+
+### 격리 검증
+
+- **per-CPU 시계열**: CPU 2,3(시스템 코어)이 실험 조건에 무관하게 flat → 격리 성공
+- **steal time**: 전 실험 구간에서 < 1% → 가상화 간섭 없음 확인
 
 ## Key Design Decisions
 

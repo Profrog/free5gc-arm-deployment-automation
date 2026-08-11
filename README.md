@@ -236,6 +236,25 @@ streamlit run app.py --server.port 8501
 - **per-CPU 시계열**: CPU 2,3(시스템 코어)이 실험 조건에 무관하게 flat → 격리 성공
 - **steal time**: 전 실험 구간에서 < 1% → 가상화 간섭 없음 확인
 
+## Baseline Experiment Results (동작 검증)
+
+테스트 환경에서 CNI 전환에 따른 KPI 차이가 실측으로 확인됨.
+
+### A-T1 vs B-T1: 대규모 트래픽 (UDP 500Mbps, 1400B, 60초)
+
+| 항목 | A-T1 (macvlan) | B-T1 (ipvlan) | 차이 |
+|------|---------------|--------------|------|
+| Offered | 500 Mbps | 500 Mbps | — |
+| Receiver throughput | 498 Mbps | 489 Mbps | macvlan +9 Mbps |
+| Packet loss | 0.28% (7,436) | 2.1% (55,021) | macvlan이 7.4× 낮음 |
+| Jitter | 0.005 ms | 0.005 ms | 동일 |
+
+**결론**: 대규모 트래픽에서 macvlan이 유리 (선행연구 예측 일치). CNI 전환의 실효성 확인.
+
+전환 시간: macvlan → ipvlan **134ms** (ip -batch, 무중단)
+
+로그 위치: [`traffic-profiles/baseline-results/`](traffic-profiles/baseline-results/)
+
 ## Key Design Decisions
 
 | 결정 | 이유 |

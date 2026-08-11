@@ -1,0 +1,10 @@
+=== A-T1: macvlan + large traffic (60s) ===
+CNI: macvlan
+Date: 2026-08-11T08:38:37+00:00
+Config: iperf3 -c 10.10.3.1 -p 5201 -u -b 500M -l 1400 -t 60
+
+Result (receiver):
+  Throughput: 498 Mbps
+  Packet Loss: 0.28% (7,436 / 2,678,612)
+  Jitter: 0.005 ms
+  Transfer: 3.48 GBytes

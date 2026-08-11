@@ -194,6 +194,11 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - stepped load 테스트로 임계점 탐색 가능
 - ARM64 환경에서는 더 높은 latency 예상
 
+### 본 프로젝트에서의 차용
+- **부하 단계별 측정 패턴**: Light/Medium/Heavy → 본 프로젝트 `upf-stress.yaml` Phase 3 (stepped load 6단계)
+- **임계점 탐색**: 부하를 올려가며 "어디서부터 CNI 전환이 필요한가"의 기준점 도출
+- **측정 방식 차이**: 이 논문은 TC-BPF(커널 hook)으로 per-packet delay 측정, 본 프로젝트는 `/proc/net/dev` + iperf3로 throughput/loss 측정
+
 ---
 
 ## [3] Simple Measurement of UPF Performance

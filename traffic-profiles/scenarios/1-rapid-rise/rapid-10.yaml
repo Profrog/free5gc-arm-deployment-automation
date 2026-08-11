@@ -6,4 +6,4 @@ phases:
 - bandwidth: 100M
   duration: 5
 - bandwidth: 350M
-  duration: 25
+  duration: 65

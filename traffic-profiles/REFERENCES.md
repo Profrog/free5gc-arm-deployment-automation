@@ -950,81 +950,23 @@ UE (client) → gNB → UPF → N6 → DN Server (iperf3 server)
 
 ---
 
-## [B9] ARM vs x86 아키텍처 차이와 네트워크 성능 영향
+## [A11] ARM vs x86 아키텍처 차이와 네트워크 성능 영향
 
-### 네트워크 인터페이스별 성능 차이가 ARM에서 더 크게 나타나는 이유
+> ARM 환경에서 커널 경로 차이에 따른 KPI 변화가 x86보다 크게 관측됨 → 실험 민감도 향상에 유리
 
-ARM 프로세서는 x86 대비 단일 코어 클럭과 IPC가 낮은 대신 와트당 성능(perf/watt)을 극대화하는 설계 철학을 따른다. 이로 인해 per-packet 처리 비용이 상대적으로 크며, 커널 네트워크 경로(bridge, netfilter, veth 등)가 길어질수록 성능 저하가 증폭된다.
-
-#### 핵심 차이점
-
-| 특성 | x86 (Intel/AMD) | ARM (Graviton, Neoverse) |
-|------|-----------------|--------------------------|
-| 설계 목표 | 단일 스레드 최대 성능 | 와트당 최대 성능 |
-| 파이프라인 | 깊음 (20+ stages) → 고클럭 가능 | 얕음 (11~13 stages) → 전력 효율 |
-| 클럭 | 4~5.8 GHz | 2.6~3.5 GHz |
-| 전력/코어 | 15~30W | 1~3W |
-| OoO 복잡도 | 매우 높음 (ROB 512+) | 중간 |
-| 에너지 효율 | 낮음 | 5~6× 우수 |
-
-#### 패킷 처리에서의 영향
-
-```
-패킷 처리 시간 = (커널 경로 명령어 수) ÷ (클럭 × IPC)
-
-bridge 경로:  NIC → bridge → netfilter → veth → container  (~수백 명령어)
-macvlan 경로: NIC → MAC 분기 → container                    (~수십 명령어)
-
-ARM에서는 명령어당 시간이 길어서 경로 차이가 throughput에 더 크게 반영됨
-```
+### 본 연구와의 관계
+- ARM에서 per-packet 처리 비용이 상대적으로 큼 → 커널 경로(macvlan vs ipvlan) 차이가 throughput에 더 크게 반영
+- 즉, ARM이 CNI 전환 효과를 관측하기에 **더 적합한 실험 플랫폼**
 
 ### 참고 문헌
 
-#### [A] NetdevConf 0x17: A Study on ARM vs Intel Networking Performance on the Linux Kernel Networking Stack
-
-- **출처**: NetdevConf 0x17, 2023
-- **URL**: https://netdevconf.org/0x17/docs/netdev-0x17-paper9-talk-slides/
-- **내용**: Linux 커널 네트워크 스택에서 ARM과 Intel 프로세서의 패킷 처리 성능 비교. ARM이 전력 효율에서 우수하나 per-packet 처리 latency에서 열세.
-
-#### [B] A Comparative Analysis of ARM and x86-64 Laptop-Class Processors: Architecture, Assembly-Level Performance, and Energy Efficiency
-
-- **저자**: Mustafa Mert Özyılmaz
-- **출처**: arXiv:2604.18896, Apr 2026
-- **URL**: https://arxiv.org/abs/2604.18896
-- **주요 결과**:
-  - Apple M3 (ARM) vs AMD Ryzen (x86) 비교
-  - x86이 branch-heavy 워크로드에서 결정적으로 빠름
-  - ARM은 에너지 효율 5.82~6.38× 우수
-  - 차이는 순수 ISA 차이가 아닌 "파이프라인 깊이, 시스템 통합, 전력 관리" 등 플랫폼 수준 차이로 해석
-
-#### [C] Intel x86 and ARM Processors: A Survey on Architectural Differences
-
-- **출처**: ResearchGate, 2022
-- **URL**: https://www.researchgate.net/publication/362105591
-- **내용**: x86(MMX, SSE, AVX)과 ARM(NEON) 아키텍처 차이 서베이. 파이프라인, SIMD, 메모리 모델 차이 상세 비교.
-
-#### [D] Changing Trends in Computer Architecture: A Comprehensive Analysis of ARM and x86 Processors
-
-- **출처**: ResearchGate, 2021
-- **URL**: https://www.researchgate.net/publication/353115679
-- **내용**: "x86은 고성능 설계, ARM은 저전력+적정 성능 설계"라는 근본적 차이 분석. ARM 기술 발전으로 성능 격차 축소 중.
-
-#### [E] Simulation of ARM and x86 Microprocessors Using In-Order and Out-of-Order CPU Models with Gem5 Simulator
-
-- **출처**: ResearchGate, 2018
-- **URL**: https://www.researchgate.net/publication/325978796
-- **내용**: Gem5 시뮬레이터를 이용한 ARM/x86 마이크로아키텍처 비교. 동일 하드웨어 구성(In-Order, Out-of-Order)에서의 IPC 차이 정량 분석.
-
-### 논문 서술 예시: ARM 채택 근거
-
-> "같은 리소스(CPU 코어 수, 메모리) 조건에서 x86은 ARM 대비 Linux 커널 네트워크 스택의 패킷 처리 성능이 우수함이 보고되어 있다 [A]. 이는 ARM 환경에서 커널 네트워크 경로 차이에 따른 시스템 KPI(throughput, latency, packet loss) 변화가 x86보다 뚜렷하게 관측됨을 의미한다. 본 연구는 이러한 특성을 활용하여, 네트워크 인터페이스 전환이 UPF 데이터플레인 성능에 미치는 영향을 명확히 측정하기 위해 ARM64 환경을 실험 플랫폼으로 채택하였다."
-
-논리 체인:
-1. 같은 리소스 기준 x86 > ARM (네트워크 패킷 처리 성능) ← [A] NetdevConf 0x17
-2. 따라서 ARM에서 인터페이스 변경 시 KPI 변화 폭이 더 큼 ← 1에서 도출
-3. 따라서 ARM이 인터페이스 전환 효과를 관측하기에 적합한 실험 플랫폼 ← 본 연구의 선택
-
-레퍼런스: [A] NetdevConf 0x17 (2023) — ARM vs Intel 리눅스 커널 네트워크 스택 성능 비교
+| 논문 | 출처 | 핵심 결과 |
+|------|------|----------|
+| [ARM vs Intel Networking](https://netdevconf.org/0x17/docs/netdev-0x17-paper9-talk-slides/) | NetdevConf 0x17, 2023 | ARM이 per-packet latency에서 열세, 경로 차이 영향 증폭 |
+| [ARM vs x86 Performance](https://arxiv.org/abs/2604.18896) | arXiv 2026 | x86이 branch-heavy에서 빠름, ARM은 에너지 효율 5.8×↑ |
+| [x86/ARM Architecture Survey](https://www.researchgate.net/publication/362105591) | ResearchGate 2022 | 파이프라인, SIMD, 메모리 모델 차이 서베이 |
+| [ARM vs x86 Trends](https://www.researchgate.net/publication/353115679) | ResearchGate 2021 | ARM 기술 발전으로 성능 격차 축소 중 |
+| [Gem5 ARM/x86 Simulation](https://www.researchgate.net/publication/325978796) | ResearchGate 2018 | In-Order/Out-of-Order IPC 차이 정량 분석 |
 
 ---
 

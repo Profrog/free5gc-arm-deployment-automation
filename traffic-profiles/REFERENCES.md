@@ -172,27 +172,15 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **출처**: arXiv:2605.28185, May 2026
 - **URL**: https://arxiv.org/abs/2605.28185
 
-### 핵심 내용
-- Containerized open5GS 환경에서 eMBB/URLLC/mMTC 3 슬라이스 동시 운용
-- TC-BPF instrumentation으로 N3→N6 per-packet forwarding delay 측정
-- 약 28M matched delay pairs 수집
-
 ### 주요 결과
 | Slice | Load | p50 latency | p99 latency |
 |-------|------|-------------|-------------|
 | eMBB  | Light (10%) | ~300μs | 574μs |
 | eMBB  | Medium (50%) | ~600μs | ~900μs |
 | eMBB  | Heavy (90%) | ~800μs | 1,243μs |
-| URLLC | All loads | Stable | Load-insensitive |
-| mMTC  | All loads | Wide-tail | TCP retx behavior |
 
+- UPF forwarding delay는 부하에 비례하여 증가
 - PFCP session modification latency: <200μs (data-plane load 무관)
-- UPF process isolation이 URLLC slice의 delay 안정성 보장
-
-### 시사점
-- UPF forwarding delay는 부하에 비례하여 증가 (eMBB)
-- stepped load 테스트로 임계점 탐색 가능
-- ARM64 환경에서는 더 높은 latency 예상
 
 ### 본 프로젝트에서의 차용
 - **부하 단계별 측정 패턴**: Light/Medium/Heavy → 본 프로젝트 `upf-stress.yaml` Phase 3 (stepped load 6단계)

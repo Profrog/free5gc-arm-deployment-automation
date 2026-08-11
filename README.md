@@ -46,7 +46,7 @@ free5gc-k8s-arm/
 │   ├── build.sh             #   NF 바이너리 빌드
 │   ├── docker-build.sh      #   Docker 이미지 (NWDAF 포함)
 │   └── deploy.sh            #   K8s 배포
-├── free5gc_source/          # NF별 소스 코드
+├── free5gc_source/          # NF별 소스 코드 (gtp5g 포함)
 ├── free5gc_build/           # 빌드된 바이너리
 ├── arm_docker/              # Docker image sources
 ├── arm_k8s/                 # Kubernetes manifests
@@ -54,9 +54,11 @@ free5gc-k8s-arm/
 │   ├── networks5g/          #   Multus NAD (ipvlan + macvlan dual-attach)
 │   ├── free5gc/             #   Core NF deployments
 │   ├── free5gc-webui/
+│   ├── free5gc-metrics/     #   메트릭 수집 설정
 │   ├── ueransim/            #   gNB + UE
 │   ├── subscriber/
-│   ├── dranet/              #   전환 스크립트 (nwdaf-switch.sh)
+│   ├── dranet/              #   ★ CNI 전환 (nwdaf-switch.sh, ip -batch 실행)
+│   │                        #     (디렉토리명은 레거시, 실제 DRANET 미사용)
 │   └── nwdaf/               #   ★ NWDAF NF (ML 엔진, 모델, Dockerfile, K8s manifests)
 ├── traffic-profiles/        # ★ 트래픽 생성 + 실험 프레임워크
 │   ├── profiles/            #   트래픽 프로파일 (APN, 시나리오)

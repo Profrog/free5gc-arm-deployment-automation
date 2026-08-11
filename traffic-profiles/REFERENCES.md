@@ -195,31 +195,27 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **출처**: GitHub Repository, Dec 2023
 - **URL**: https://github.com/s5uishida/simple_measurement_of_upf_performance
 
-### 측정 환경
-- VirtualBox VM (2-core, 8GB RAM)
-- PacketRusher → 5GC (Open5GS / free5GC) → iperf3 server
-- 단일 UE, DNN: internet, SST:1/SD:010203
-
-### 주요 결과 (free5GC UPF v1.2.0)
+### 주요 결과 (free5GC UPF v1.2.0, x86 VM 환경)
 | Metric | Value |
 |--------|-------|
-| TCP throughput | 233 Mbps (sender) / 229 Mbps (receiver) |
-| UDP throughput (offered 500M) | 499 Mbps (sender) / 382 Mbps (receiver) |
+| TCP throughput | 233 Mbps |
+| UDP throughput (offered 500M) | 382 Mbps (receiver) |
 | UDP packet loss | 23% |
-| RTT (ping) | 0.786ms avg |
+| RTT (ping) | 0.786ms |
 
-### UPF 비교 (Open5GS C-Plane 기준)
-| UPF | TCP | UDP (recv) | Loss | RTT |
-|-----|-----|-----------|------|-----|
-| UPG-VPP v1.11.0 | 1.14 Gbps | 455 Mbps | 0.96% | 0.398ms |
-| eUPF v0.6.0 | 359 Mbps | 409 Mbps | 3.6% | 0.882ms |
-| Open5GS UPF (TUN) | 205 Mbps | 319 Mbps | 30% | 1.081ms |
-| Open5GS UPF (TAP) | 275 Mbps | 314 Mbps | 32% | 1.198ms |
+### UPF 비교
+| UPF | UDP (recv) | Loss | 비고 |
+|-----|-----------|------|------|
+| UPG-VPP v1.11.0 | 455 Mbps | 0.96% | DPDK 기반, 고성능 |
+| eUPF v0.6.0 | 409 Mbps | 3.6% | eBPF 기반 |
+| free5GC go-upf | 382 Mbps | 23% | 커널 TUN 기반 |
+| Open5GS UPF | 319 Mbps | 30% | 커널 TUN 기반 |
 
-### 시사점
-- free5GC go-upf는 kernel TUN 기반으로 200~400Mbps 대역 성능
-- ARM64(Graviton 등)에서는 추가 성능 저하 예상 (40-60% 수준)
-- UDP 고부하 시 loss가 급격히 증가하는 임계점 존재
+### 본 프로젝트에서의 차용
+- **성능 기준선**: free5GC go-upf의 x86 성능(200~400Mbps)을 기준으로 ARM64 실험 설계
+- **ARM64 성능 차이 활용**: ARM64에서는 추가 성능 저하 예상(40~60% 수준) → CNI 변경에 따른 KPI 차이가 x86보다 크게 관측됨 → 실험 민감도 향상에 유리
+- **iperf3 -u -b 500M 조건 재현**: 본 프로젝트 `upf-stress.yaml` Phase 2에서 동일 조건으로 ARM64 차이 비교
+- **loss 임계점**: UDP 고부하 시 loss 급증 → NWDAF가 전환을 판단해야 하는 시점의 근거
 
 ---
 

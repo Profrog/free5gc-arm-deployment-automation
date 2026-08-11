@@ -196,7 +196,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [2] Simple Measurement of UPF Performance
+## [3] Simple Measurement of UPF Performance
 
 - **저자**: s5uishida
 - **출처**: GitHub Repository, Dec 2023
@@ -230,7 +230,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [3] 5G UPF Performance on Intel Xeon (Reference — Commercial Scale)
+## [4] 5G UPF Performance on Intel Xeon (Reference — Commercial Scale)
 
 - **출처**: Intel Network Builders, 2024
 - **URL**: https://builders.intel.com/docs/networkbuilders/5g-flexcore-2-0-user-plane-function...
@@ -252,7 +252,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [4] 3GPP TS 23.288 — Network Data Analytics Services (NWDAF)
+## [5] 3GPP TS 23.288 — Network Data Analytics Services (NWDAF)
 
 - **출처**: 3GPP, Release 17/18
 - **URL**: https://www.3gpp.org/DynaReport/23288.htm
@@ -269,7 +269,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [5] 3GPP TS 23.501 — System Architecture for the 5G System (5GS)
+## [6] 3GPP TS 23.501 — System Architecture for the 5G System (5GS)
 
 - **출처**: 3GPP, Release 17
 - **URL**: https://www.3gpp.org/DynaReport/23501.htm
@@ -282,7 +282,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [6] 3GPP TS 29.244 — Interface between the Control Plane and the User Plane (PFCP)
+## [7] 3GPP TS 29.244 — Interface between the Control Plane and the User Plane (PFCP)
 
 - **출처**: 3GPP, Release 17
 - **URL**: https://www.3gpp.org/DynaReport/29244.htm
@@ -295,7 +295,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [7] DRANET: A Composable Architecture for High-Performance Networking in Kubernetes
+## [8] DRANET: A Composable Architecture for High-Performance Networking in Kubernetes
 
 - **저자**: Antonio Ojea et al. (kubernetes-sigs)
 - **출처**: arXiv:2506.23628, Jun 2025
@@ -315,7 +315,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [8] Kubernetes Dynamic Resource Allocation (DRA)
+## [9] Kubernetes Dynamic Resource Allocation (DRA)
 
 - **출처**: Kubernetes KEP-3063, KEP-4381
 - **URL**: https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/
@@ -332,7 +332,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [9] LLM-Enabled NWDAF: A Step Toward AI-Native 6G Network Intelligence
+## [10] LLM-Enabled NWDAF: A Step Toward AI-Native 6G Network Intelligence
 
 - **저자**: (University of Waterloo 등)
 - **출처**: arXiv:2606.11877, Jun 2026
@@ -361,7 +361,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [10] CNI 타입별 성능 차이 근거 — 전환 판단의 유효성 뒷받침
+## [11] CNI 타입별 성능 차이 근거 — 전환 판단의 유효성 뒷받침
 
 > **핵심 질문**: "네트워크 인터페이스를 전환한 뒤 KPI를 비교해서 '이 전환이 올바랐다'고 판단하는 방법론이 유효한가?"
 
@@ -475,7 +475,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [11] 트래픽 프로파일 ↔ CNI 적합성 매핑 근거
+## [12] 트래픽 프로파일 ↔ CNI 적합성 매핑 근거
 
 > **핵심 논리**: "선행연구에 따르면 프로파일 A(소패킷 고빈도)에서는 ipvlan이 유리하고, 프로파일 B(대패킷 고throughput)에서는 macvlan이 유리하다. 따라서 A→B 전환 시 NWDAF가 macvlan을 선택하는 것이 올바르다."
 
@@ -551,7 +551,7 @@ Phase 3 (전환 후):       동일 streaming-dl 계속 → KPI 개선 확인
 
 ---
 
-## [12] NWDAF 최소 구현의 정당성 — 3GPP Rel-17 기능 분리 구조
+## [13] NWDAF 최소 구현의 정당성 — 3GPP Rel-17 기능 분리 구조
 
 > **핵심**: 3GPP TS 23.288 Rel-17에서 NWDAF의 AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으며, 부분 구현이 명시적으로 허용된다.
 
@@ -616,7 +616,7 @@ TS 23.288 §6.1.2에 따르면:
 
 ---
 
-## [13] ipvlan/macvlan 동일 위상 — 네트워크 인터페이스 드라이버 관계
+## [14] ipvlan/macvlan 동일 위상 — 네트워크 인터페이스 드라이버 관계
 
 ### 기술적 위치
 
@@ -649,7 +649,7 @@ TS 23.288 §6.1.2에 따르면:
 
 ---
 
-## [14] 실험 설계 — 트래픽 시나리오 × CNI 전략 매트릭스
+## [15] 실험 설계 — 트래픽 시나리오 × CNI 전략 매트릭스
 
 ### 트래픽 시나리오 (행)
 
@@ -712,7 +712,7 @@ T3 (전환):    C > A, C > B  (NWDAF만 두 구간 모두 최적 — 핵심 결�
 
 ---
 
-## [15] NWDAF 데이터 수집 경로: OAM 방식 선택의 정당성
+## [16] NWDAF 데이터 수집 경로: OAM 방식 선택의 정당성
 
 > **예상 공격**: "왜 3GPP TS 23.288의 Nupf Event Exposure를 구현하지 않았는가?"
 
@@ -786,7 +786,7 @@ free5GC Blog (2024.11):
 
 ---
 
-## [16] ML 모델 선택 근거 — Random Forest
+## [17] ML 모델 선택 근거 — Random Forest
 
 ### 3GPP는 모델을 지정하지 않음
 
@@ -850,7 +850,7 @@ Feature Importance (학습 결과):
 
 ---
 
-## [17] 실험 격리 — CPU Pinning 및 검증
+## [18] 실험 격리 — CPU Pinning 및 검증
 
 ### 문제: 단일 노드에서의 리소스 경합
 
@@ -1081,7 +1081,7 @@ else:
 
 ---
 
-## 실험 측정 범위 (Measurement Scope Limitation)
+## [21] 실험 측정 범위 (Measurement Scope Limitation)
 
 ### 현재 테스트베드 구성
 
@@ -1131,7 +1131,7 @@ UE (client) → gNB → UPF → N6 → DN Server (iperf3 server)
 
 ---
 
-## ARM vs x86 아키텍처 차이와 네트워크 성능 영향
+## [22] ARM vs x86 아키텍처 차이와 네트워크 성능 영향
 
 ### 네트워크 인터페이스별 성능 차이가 ARM에서 더 크게 나타나는 이유
 
@@ -1209,7 +1209,7 @@ ARM에서는 명령어당 시간이 길어서 경로 차이가 throughput에 더
 
 ---
 
-## 무중단 인터페이스 전환 메커니즘 (Zero-Downtime CNI Backend Switching)
+## [23] 무중단 인터페이스 전환 메커니즘 (Zero-Downtime CNI Backend Switching)
 
 ### 핵심 원리
 
@@ -1319,7 +1319,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## ML Feature 설계 근거 (NWDAF 입력 KPI 선정)
+## [24] ML Feature 설계 근거 (NWDAF 입력 KPI 선정)
 
 ### 선정된 Feature (5개)
 
@@ -1363,7 +1363,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## [18] 표준 준수 범위와 확장 경계 (Standard Compliance Boundary)
+## [25] 표준 준수 범위와 확장 경계 (Standard Compliance Boundary)
 
 ### 문제: "NWDAF가 CNI를 전환하는 게 3GPP 표준인가?"
 
@@ -1495,7 +1495,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## [19] NWDAF 표준 전환 대상 vs 본 연구 전환 대상 (Switching Target Comparison)
+## [26] NWDAF 표준 전환 대상 vs 본 연구 전환 대상 (Switching Target Comparison)
 
 ### 핵심 질문
 
@@ -1628,7 +1628,7 @@ Intra-UPF 최적화 (본 연구):
 
 ---
 
-## [20] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
+## [27] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
 
 ### 핵심 논리
 
@@ -1779,7 +1779,7 @@ Step 4: 그런데 이 전환을 트래픽 특성에 따라 자동으로 판단�
 
 ---
 
-## 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
+## [28] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
 
 ### 계층 구조
 

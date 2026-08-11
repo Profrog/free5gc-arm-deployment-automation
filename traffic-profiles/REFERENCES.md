@@ -283,9 +283,13 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - 기존 적용 대상: AI/ML workload의 RDMA 디바이스
 
 ### 본 연구와의 관계
-- 본 연구에서는 DRANET의 개념(DRA 기반 네트워크 관리)을 참고하되, 실제 전환은 커널 수준 IP 이동 방식으로 구현
+- DRANET의 개념(DRA 기반 네트워크 관리)을 참고하되, 실제 전환은 커널 수준 IP 이동 방식으로 구현
 - NWDAF의 결정을 `ip addr del/add`로 실행하여 무중단 전환 달성
-- ipvlan(저오버헤드) ↔ macvlan(고성능) 간 동적 전환의 실행 계층
+
+### 본 연구에서 쓸 수 없는 한계 (미채택 근거)
+- **ipvlan/macvlan 서브인터페이스 생성 미지원**: DRANET은 SR-IOV, RDMA 등 하드웨어 디바이스 관리가 주 대상이며, 같은 master 위에 ipvlan↔macvlan을 동적 전환하는 기능 없음
+- **IP 변경 가능성**: ResourceClaim 변경 시 인터페이스가 재생성되어 IP가 바뀔 수 있음 → GTP-U/PFCP 세션 끊김 위험
+- **전환 시간**: ResourceClaim 변경 → DRANET reconcile → 인터페이스 재구성에 수 초 소요 (본 연구 ~140ms 대비 느림)
 
 ---
 

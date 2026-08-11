@@ -153,17 +153,23 @@ with st.sidebar:
 metadata, summary, anomalies, pods = load_run_data(selected_run)
 
 # ── 상단: 메타정보 & 요약 ──
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
-    st.metric("⏱ Duration", f"{metadata.get('duration_sec', '?')}s")
+    st.metric("🔌 CNI", metadata.get('cni', '?'))
 with col2:
-    st.metric("📊 Samples", metadata.get('total_samples', '?'))
+    traffic = metadata.get('traffic', {})
+    st.metric("📶 Traffic", traffic.get('profile', '?'))
 with col3:
-    st.metric("🏗 Pods", metadata.get('pods_monitored', len(pods)))
+    st.metric("⏱ Duration", f"{metadata.get('duration_sec', '?')}s")
 with col4:
-    classification = anomalies.get('classification', 'N/A')
-    color = "🟢" if classification == "NORMAL" else "🟡" if classification == "POD_SPECIFIC" else "🔴"
-    st.metric(f"{color} Status", classification)
+    st.metric("📊 Samples", metadata.get('total_samples', '?'))
+with col5:
+    st.metric("🏗 Pods", metadata.get('pods_monitored', len(pods)))
+
+# 트래픽 상세 (있으면)
+if metadata.get('traffic'):
+    t = metadata['traffic']
+    st.caption(f"Traffic: {t.get('protocol','?')} {t.get('bandwidth','?')} | Packet: {t.get('packet_size','?')} | Duration: {t.get('duration_sec','?')}s")
 
 st.divider()
 

@@ -281,47 +281,65 @@ with tab_mem:
 
 # ── Packet Loss 탭 ──
 with tab_loss:
-    if pods:
-        import pandas as pd
+    import pandas as pd
 
-        # UPF Pod만 필터
-        upf_pods_list = [p for p in pods.keys() if "upf" in p.lower()]
-        if upf_pods_list:
-            col_title, col_select = st.columns([1, 2])
-            with col_title:
-                st.subheader("Packet Loss (%)")
-            with col_select:
-                selected_loss_pod = st.selectbox("UPF Pod", upf_pods_list, index=0, key="loss_pod")
+    st.subheader("Packet Loss (%) — iperf3 interval 기반")
 
-            loss_chart = {}
-            if pods[selected_loss_pod]["packet_loss"]:
-                losses = [r.get("loss_pct", 0) for r in pods[selected_loss_pod]["packet_loss"]]
-                loss_chart[f"[{selected_run[:15]}] {selected_loss_pod[:20]}"] = losses
+    # iperf3_loss.jsonl 로딩 함수
+    def load_iperf3_loss(run_id):
+        loss_file = MONITOR_DATA_DIR / run_id / "iperf3_loss.jsonl"
+        return load_jsonl(loss_file)
 
-            if selected_run2:
-                _, _, _, pods2 = load_run_data(selected_run2)
-                nf_type = selected_loss_pod.split("-")[0:2]
-                for pod_name, data in pods2.items():
-                    if pod_name.split("-")[0:2] == nf_type and data["packet_loss"]:
-                        losses = [r.get("loss_pct", 0) for r in data["packet_loss"]]
-                        loss_chart[f"[{selected_run2[:15]}] {pod_name[:20]}"] = losses
-                        break
+    loss_data1 = load_iperf3_loss(selected_run)
+    loss_data2 = load_iperf3_loss(selected_run2) if selected_run2 else []
 
-            if loss_chart:
-                max_len = max(len(v) for v in loss_chart.values())
-                for k in loss_chart:
-                    loss_chart[k] = loss_chart[k] + [None] * (max_len - len(loss_chart[k]))
-                df = pd.DataFrame(loss_chart)
-                st.line_chart(df, height=400)
+    if loss_data1 or loss_data2:
+        loss_chart = {}
 
-                for label, vals in loss_chart.items():
-                    valid = [v for v in vals if v is not None]
-                    if valid:
-                        st.caption(f"{label} — Mean: {sum(valid)/len(valid):.4f}% | Max: {max(valid):.4f}% | Samples: {len(valid)}")
-            else:
-                st.info("선택한 UPF의 packet loss 데이터 없음")
-        else:
-            st.info("UPF Pod 없음")
+        if loss_data1:
+            losses1 = [r.get("lost_percent", 0) for r in loss_data1]
+            bps1 = [r.get("bps", 0) / 1e6 for r in loss_data1]
+            loss_chart[f"[{selected_run[:20]}] loss%"] = losses1
+
+        if loss_data2:
+            losses2 = [r.get("lost_percent", 0) for r in loss_data2]
+            bps2 = [r.get("bps", 0) / 1e6 for r in loss_data2]
+            loss_chart[f"[{selected_run2[:20]}] loss%"] = losses2
+
+        if loss_chart:
+            max_len = max(len(v) for v in loss_chart.values())
+            for k in loss_chart:
+                loss_chart[k] = loss_chart[k] + [None] * (max_len - len(loss_chart[k]))
+            df = pd.DataFrame(loss_chart)
+            st.line_chart(df, height=400)
+
+            # 요약
+            for label, vals in loss_chart.items():
+                valid = [v for v in vals if v is not None]
+                if valid:
+                    st.caption(f"{label} — Mean: {sum(valid)/len(valid):.2f}% | Max: {max(valid):.2f}% | Samples: {len(valid)}")
+
+        # Throughput 차트도 같이 표시
+        st.subheader("Throughput (Mbps) — iperf3 interval 기반")
+        tp_chart = {}
+        if loss_data1:
+            tp_chart[f"[{selected_run[:20]}] Mbps"] = [r.get("bps", 0) / 1e6 for r in loss_data1]
+        if loss_data2:
+            tp_chart[f"[{selected_run2[:20]}] Mbps"] = [r.get("bps", 0) / 1e6 for r in loss_data2]
+
+        if tp_chart:
+            max_len = max(len(v) for v in tp_chart.values())
+            for k in tp_chart:
+                tp_chart[k] = tp_chart[k] + [None] * (max_len - len(tp_chart[k]))
+            df = pd.DataFrame(tp_chart)
+            st.line_chart(df, height=400)
+
+            for label, vals in tp_chart.items():
+                valid = [v for v in vals if v is not None]
+                if valid:
+                    st.caption(f"{label} — Mean: {sum(valid)/len(valid):.1f} Mbps | Max: {max(valid):.1f} Mbps")
+    else:
+        st.info("iperf3_loss.jsonl 없음 — quick-test.sh (프로파일 모드)로 실행하면 생성됩니다.")
 
 # ── Anomaly 탭 ──
 with tab_anomaly:

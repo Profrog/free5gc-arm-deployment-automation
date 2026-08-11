@@ -21,7 +21,8 @@ echo "════════════════════════�
 # 1. CNI 전환
 echo "[$(date '+%H:%M:%S')] Setting CNI: $CNI"
 "${SCRIPT_DIR}/../arm_k8s/nwdaf/nwdaf-switch.sh" "$CNI"
-sleep 2
+echo "[$(date '+%H:%M:%S')] Waiting 10s for stabilization..."
+sleep 10
 
 # 2. 모니터링 시작
 echo "[$(date '+%H:%M:%S')] Starting monitor..."

@@ -1775,3 +1775,62 @@ Step 4: 그런데 이 전환을 트래픽 특성에 따라 자동으로 판단�
 │  "언제, 어떤 경로로 전환할지를 자동 판단 + 무중단 실행"           │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
+
+### 계층 구조
+
+```
+[유저스페이스]  UPF 프로세스 (go-upf) — bind("10.10.3.1")
+───────────────────────────────────────────────────────
+[커널]         socket
+                 ↓
+              ipvlan/macvlan (가상 인터페이스 드라이버)
+                 ↓
+              bridge (n3br / n3br-ipv)
+                 ↓
+              enp0s6 (NIC 디바이스 오브젝트 — 커널이 하드웨어를 추상화)
+───────────────────────────────────────────────────────
+[하드웨어]    물리 NIC 칩 (PCIe bus 0, slot 6)
+```
+
+### enp0s6의 정체
+
+- **커널과 물리 NIC 하드웨어 간의 인터페이스** (추상화 계층)
+- 커널의 NIC 드라이버가 하드웨어 초기화 시 등록하는 네트워크 디바이스 오브젝트
+- 이름 규칙: `en`(ethernet) + `p0`(PCI bus 0) + `s6`(slot 6) — Predictable Network Interface Names (systemd)
+- ipvlan/macvlan은 이 디바이스를 `master`로 참조하여 커널 내부에 가상 인터페이스를 생성
+
+### 본 프로젝트에서의 역할
+
+```json
+// NetworkAttachmentDefinition
+{ "master": "enp0s6" }
+```
+
+"enp0s6의 커널 드라이버 위에 ipvlan/macvlan 서브인터페이스를 생성하겠다"는 선언.
+
+### `ip addr del/add`의 동작 레벨
+
+- 파일 수정이 아님 — 커널 메모리의 네트워크 자료구조를 직접 변경
+- 경로: `ip 명령 → netlink 소켓 → 커널 네트워크 서브시스템 → 라우팅/인터페이스 상태 변경`
+- 재부팅 시 사라짐 (비영속), 적용 즉각적 (마이크로초 단위)
+
+### `ip addr` vs `iptables` 차이
+
+| | `ip addr` | `iptables` |
+|--|-----------|-----------|
+| 역할 | 인터페이스에 IP 주소 할당 | 패킷 필터링/NAT |
+| 레이어 | L2/L3 경계 (어디서 수신할지) | L3/L4 (허용/차단/변환) |
+| 동작 시점 | 패킷 도착 전 — 수신 인터페이스 결정 | 패킷 도착 후 — 처리 규칙 적용 |
+
+본 프로젝트의 전환은 `ip addr`로 수행하며, iptables는 관여하지 않음.
+
+### 참고 문서
+
+- [Linux Kernel Networking — Network Device Naming](https://www.freedesktop.org/wiki/Software/systemd/PredictableNetworkInterfaceNames/) — systemd의 예측 가능한 인터페이스 이름 규칙
+- [Linux Kernel Documentation: netdevices](https://www.kernel.org/doc/html/latest/networking/netdevices.html) — 커널 네트워크 디바이스 구조
+- [iproute2 / netlink](https://man7.org/linux/man-pages/man7/netlink.7.html) — ip 명령이 커널과 통신하는 메커니즘
+- [IPVLAN — The Beginning (netdev 0.1, Bandewar/Google, 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf) — ipvlan이 master 인터페이스를 참조하는 구조 설명

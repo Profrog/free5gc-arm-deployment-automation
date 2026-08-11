@@ -297,10 +297,10 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 | 연구 | NWDAF 구현 | ML 모델 | 대상 NF | 실행(Action) | closed-loop | 본 연구와의 차이 |
 |------|-----------|---------|---------|-------------|-------------|-----------------|
-| Ardestani 2025 (Waterloo) | ✅ 3GPP 준수 | Graph-based RF | UPF | PDU session release | ✅ | 보안(bot detection), CNI 전환 아님 |
-| LLM-NWDAF 2026 (Waterloo) | ✅ | LLM | 전체 NF | 분석만 (실행 없음) | ❌ | 분석 강화 목적, 인프라 실행 없음 |
-| Bayleyegn 2024 (NetSoft) | ✅ | Random Forest | UPF | 트래픽 분류 | ❌ | 분류만, 전환 실행 없음 |
-| Kan 2024 | ✅ | LLM | 전체 | 정책 제안 | ❌ | 제안만, 자동 실행 없음 |
+| [Ardestani 2025](https://arxiv.org/abs/2505.06789) (Waterloo) | ✅ 3GPP 준수 | Graph-based RF | UPF | PDU session release | ✅ | 보안(bot detection), CNI 전환 아님 |
+| [LLM-NWDAF 2026](https://arxiv.org/abs/2606.11877) (Waterloo) | ✅ | LLM | 전체 NF | 분석만 (실행 없음) | ❌ | 분석 강화 목적, 인프라 실행 없음 |
+| [Bayleyegn 2024](https://ieeexplore.ieee.org/document/10582517) (NetSoft) | ✅ | Random Forest | UPF | 트래픽 분류 | ❌ | 분류만, 전환 실행 없음 |
+| [Kan 2024](https://arxiv.org/abs/2410.03576) | ✅ | LLM | 전체 | 정책 제안 | ❌ | 제안만, 자동 실행 없음 |
 | **본 연구** | **✅ AnLF** | **Random Forest** | **UPF** | **CNI 전환 (ip -batch)** | **✅** | **인프라 레이어까지 실행 + 무중단** |
 
 ### 핵심 차별점

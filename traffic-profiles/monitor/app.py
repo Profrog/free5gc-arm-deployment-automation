@@ -174,31 +174,34 @@ tab_cpu, tab_mem, tab_loss, tab_anomaly, tab_summary, tab_compare = st.tabs(
 
 # ── CPU 탭 ──
 with tab_cpu:
-    st.subheader("UPF CPU 사용량 (millicores)")
-
     if pods:
         import pandas as pd
 
-        # 기본: UPF만 표시
-        chart_data = {}
-        for pod_name, data in pods.items():
-            if "upf" in pod_name.lower():
-                resources = data["resources"]
-                if resources:
-                    cpus = [r["cpu_milli"] for r in resources]
-                    label = f"[{selected_run[:15]}] {pod_name[:20]}"
-                    chart_data[label] = cpus
+        # Pod 선택 (기본: UPF)
+        pod_list = list(pods.keys())
+        upf_default = next((i for i, p in enumerate(pod_list) if "upf" in p.lower() and "upf2" not in p.lower()), 0)
+        col_title, col_select = st.columns([1, 2])
+        with col_title:
+            st.subheader("CPU 사용량 (millicores)")
+        with col_select:
+            selected_pod = st.selectbox("Pod", pod_list, index=upf_default, key="cpu_pod")
 
-        # Run 2 오버레이 (UPF만)
+        # 선택된 Pod 차트
+        chart_data = {}
+        if pods[selected_pod]["resources"]:
+            cpus = [r["cpu_milli"] for r in pods[selected_pod]["resources"]]
+            chart_data[f"[{selected_run[:15]}] {selected_pod[:20]}"] = cpus
+
+        # Run 2 오버레이 (같은 Pod 이름 또는 같은 NF)
         if selected_run2:
             _, _, _, pods2 = load_run_data(selected_run2)
+            # 같은 Pod 이름 또는 같은 NF 타입 찾기
+            nf_type = selected_pod.split("-")[0:2]
             for pod_name, data in pods2.items():
-                if "upf" in pod_name.lower():
-                    resources = data["resources"]
-                    if resources:
-                        cpus = [r["cpu_milli"] for r in resources]
-                        label = f"[{selected_run2[:15]}] {pod_name[:20]}"
-                        chart_data[label] = cpus
+                if pod_name.split("-")[0:2] == nf_type and data["resources"]:
+                    cpus = [r["cpu_milli"] for r in data["resources"]]
+                    chart_data[f"[{selected_run2[:15]}] {pod_name[:20]}"] = cpus
+                    break
 
         if chart_data:
             max_len = max(len(v) for v in chart_data.values())
@@ -207,15 +210,11 @@ with tab_cpu:
             df = pd.DataFrame(chart_data)
             st.line_chart(df, height=400)
 
-        # Pod 상세 보기 (전체 Pod 선택 가능)
-        st.divider()
-        st.subheader("Pod 상세 보기")
-        selected_pod = st.selectbox("Pod 선택", list(pods.keys()), key="cpu_pod")
-        if selected_pod and pods[selected_pod]["resources"]:
-            res = pods[selected_pod]["resources"]
-            cpus = [r["cpu_milli"] for r in res]
-            st.line_chart(cpus, height=200)
-            st.caption(f"Mean: {sum(cpus)/len(cpus):.1f}m | Max: {max(cpus)}m | Samples: {len(cpus)}")
+            # 요약 메트릭
+            for label, vals in chart_data.items():
+                valid = [v for v in vals if v is not None]
+                if valid:
+                    st.caption(f"{label} — Mean: {sum(valid)/len(valid):.1f}m | Max: {max(valid)}m | Samples: {len(valid)}")
 
 # ── Memory 탭 ──
 with tab_mem:

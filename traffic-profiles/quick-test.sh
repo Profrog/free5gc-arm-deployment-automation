@@ -105,32 +105,96 @@ with open(m, 'w') as f: json.dump(data, f, indent=2)
 if [[ "$MODE" == "profile" ]]; then
     echo "[$(date '+%H:%M:%S')] Running profile phases..."
     python3 -c "
-import yaml, subprocess, sys
+import yaml, subprocess, sys, json, os
 
 p = yaml.safe_load(open('${PROFILE}'))
 pkt_size = p['packet_size']
+monitor_dir = '${MONITOR_DIR}'
+loss_file = os.path.join(monitor_dir, 'iperf3_loss.jsonl')
 
-for i, phase in enumerate(p['phases']):
-    bw = phase['bandwidth']
-    dur = phase['duration']
-    print(f'  Phase {i+1}/{len(p[\"phases\"])}: {bw} for {dur}s (pkt={pkt_size}B)', flush=True)
-    cmd = [
-        'kubectl', 'exec', '-n', '${NAMESPACE}', 'iperf3-n3', '--',
-        'iperf3', '-c', '${TARGET_IP}', '-p', '${TARGET_PORT}',
-        '-u', '-b', bw, '-l', str(pkt_size), '-t', str(dur)
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    # 마지막 줄만 출력 (결과 요약)
-    lines = result.stdout.strip().split('\n')
-    for line in lines[-3:]:
-        if 'receiver' in line or 'sender' in line:
-            print(f'    {line.strip()}', flush=True)
+with open(loss_file, 'w') as lf:
+    for i, phase in enumerate(p['phases']):
+        bw = phase['bandwidth']
+        dur = phase['duration']
+        print(f'  Phase {i+1}/{len(p[\"phases\"])}: {bw} for {dur}s (pkt={pkt_size}B)', flush=True)
+        cmd = [
+            'kubectl', 'exec', '-n', '${NAMESPACE}', 'iperf3-n3', '--',
+            'iperf3', '-c', '${TARGET_IP}', '-p', '${TARGET_PORT}',
+            '-u', '-b', bw, '-l', str(pkt_size), '-t', str(dur),
+            '-i', '5', '--json'
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            data = json.loads(result.stdout)
+            # interval별 데이터 추출
+            for interval in data.get('intervals', []):
+                s = interval['sum']
+                ts_offset = s.get('start', 0)
+                record = {
+                    'phase': i+1,
+                    'bandwidth_offered': bw,
+                    'start': s.get('start', 0),
+                    'end': s.get('end', 0),
+                    'bytes': s.get('bytes', 0),
+                    'bps': s.get('bits_per_second', 0),
+                    'packets': s.get('packets', 0),
+                    'lost_packets': s.get('lost_packets', 0),
+                    'lost_percent': s.get('lost_percent', 0),
+                }
+                lf.write(json.dumps(record) + '\n')
+                lf.flush()
+            # 최종 결과 출력
+            end = data.get('end', {}).get('sum', {})
+            lost = end.get('lost_packets', 0)
+            total = end.get('packets', 0)
+            pct = end.get('lost_percent', 0)
+            bps = end.get('bits_per_second', 0) / 1e6
+            print(f'    → {bps:.1f} Mbps, loss: {lost}/{total} ({pct:.2f}%)', flush=True)
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f'    → parse error: {e}', flush=True)
+            # fallback: raw 결과 저장
+            pass
+
+print(f'  Loss log: {loss_file}', flush=True)
 " 2>&1 | tee "${MONITOR_DIR}/iperf3-result.txt"
 else
     echo "[$(date '+%H:%M:%S')] Running iperf3 (UDP ${TOTAL_DURATION}s, 500M, 1400B)..."
     kubectl exec -n "$NAMESPACE" iperf3-n3 -- \
         iperf3 -c "$TARGET_IP" -p "$TARGET_PORT" -u -b 500M -l 1400 -t "$TOTAL_DURATION" \
-        2>&1 | tee "${MONITOR_DIR}/iperf3-result.txt"
+        -i 5 --json 2>&1 | python3 -c "
+import sys, json, os
+monitor_dir = '${MONITOR_DIR}'
+loss_file = os.path.join(monitor_dir, 'iperf3_loss.jsonl')
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+    with open(loss_file, 'w') as lf:
+        for interval in data.get('intervals', []):
+            s = interval['sum']
+            record = {
+                'phase': 1,
+                'bandwidth_offered': '500M',
+                'start': s.get('start', 0),
+                'end': s.get('end', 0),
+                'bytes': s.get('bytes', 0),
+                'bps': s.get('bits_per_second', 0),
+                'packets': s.get('packets', 0),
+                'lost_packets': s.get('lost_packets', 0),
+                'lost_percent': s.get('lost_percent', 0),
+            }
+            lf.write(json.dumps(record) + '\n')
+    end = data.get('end', {}).get('sum', {})
+    bps = end.get('bits_per_second', 0) / 1e6
+    lost = end.get('lost_packets', 0)
+    total = end.get('packets', 0)
+    pct = end.get('lost_percent', 0)
+    print(f'  → {bps:.1f} Mbps, loss: {lost}/{total} ({pct:.2f}%)')
+    print(f'  Loss log: {loss_file}')
+except Exception as e:
+    print(f'  Parse error: {e}')
+    with open(os.path.join(monitor_dir, 'iperf3-raw.json'), 'w') as f:
+        f.write(raw)
+"
 fi
 
 # 5. 모니터링 종료

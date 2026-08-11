@@ -216,7 +216,20 @@ monitor-data/run_20260811_041000/
 |------|------|
 | `monitor-visualize.py` | 시계열 그래프 생성 (throughput, loss, per-CPU) |
 | `monitor-detect.py` | 이상 탐지 (anomaly detection) |
-| `app.py` | 웹 대시보드 (실시간 모니터링) |
+| `app.py` | Streamlit 웹 대시보드 (수집 결과 시각화) |
+
+```bash
+# 대시보드 실행 (수집 완료 후)
+cd traffic-profiles/monitor
+streamlit run app.py --server.port 8501
+# → http://<서버IP>:8501 에서 확인
+```
+
+대시보드 기능:
+- Pod별 CPU/Memory 시계열 차트
+- UPF Packet Loss 추이
+- Anomaly Detection 결과 오버레이
+- Run 간 비교 (A-T1 vs B-T1 등)
 
 ### 격리 검증
 

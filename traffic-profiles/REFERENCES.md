@@ -156,15 +156,20 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 | # | 예상 공격 | 방어 | 근거 |
 |---|----------|------|------|
-| 1 | NWDAF 구현이 너무 단순 | AnLF만 구현은 Rel-17이 허용 | TS 23.288 §6.2A |
-| 2 | 프로파일이 표준 준수? | 3GPP TR 38.913, TS 22.261 파라미터 사용 | [11] |
-| 3 | KPI 비교로 판단 평가 가능? | NWDAF feedback loop = 표준 패턴 | TS 23.288, ETSI ZSM, O-RAN |
-| 4 | CNI 변경→KPI 인과관계? | Qi 2021 (IEEE TNSM) + CPU pinning으로 변수 격리 | [10], [17] |
-| 5 | Nupf 미구현 | OAM은 표준 경로, 오픈소스 공통, 측정 왜곡 방지 | [15] |
-| 6 | ML 모델 단순 | model-agnostic 표준, RF는 학계 관행 | [16] |
-| 7 | VM 환경 격리 | steal time < 1% 검증, 동일 조건 비교 | [17] |
-| 8 | ipvlan/macvlan만 | ARM64 가용성, 단일 변수 통제 | [13] |
-| 9 | DRANET 안 쓰는데? | DRANET은 ipvlan↔macvlan 미지원 확인, IP 이동이 더 적합 | [7] |
+| 1 | NWDAF 구현이 너무 단순 | AnLF만 구현은 Rel-17이 허용, 학계도 동일 범위 | A4 (TS 23.288 §6.2A), A8 |
+| 2 | 프로파일이 표준 준수? | 3GPP TR 38.913, TS 22.261 파라미터 직접 사용 | A10 |
+| 3 | KPI 비교로 판단 평가 가능? | NWDAF feedback loop = 표준 패턴, ETSI/O-RAN도 동일 방식 | A9-B |
+| 4 | CNI 변경→KPI 인과관계? | 선행연구 5편 + CPU pinning으로 변수 격리 | A9-A, B5 |
+| 5 | Nupf 미구현 | OAM은 표준 경로, 오픈소스 5GC 공통, 측정 대상 성능 무영향 | B3 |
+| 6 | ML 모델 단순 | model-agnostic 표준, RF는 학계 4편 선례, ARM64 추론 <1ms | B4 |
+| 7 | VM 환경 격리 | steal time < 1% 검증, per-CPU 시계열로 격리 확인 | B5 |
+| 8 | ipvlan/macvlan만 | ARM64 가용성, 단일 변수 통제, 커널 제약으로 2종이 현실적 최대 | B1, B10 |
+| 9 | DRANET 안 쓰는데? | ipvlan↔macvlan 미지원 확인, IP 변경 위험, 전환 수 초 (본 연구 ~140ms) | A7 |
+| 10 | 단일 노드에서 일반화 가능? | IETF BMWG 준수 + 5회 반복 + 통계(95% CI), Limitation에 명시 | B2, B6 |
+| 11 | 왜 ARM? x86이 더 좋잖아 | ARM에서 경로 차이가 더 크게 관측됨 → 실험 민감도 향상 | A11 |
+| 12 | 표준 위반 아닌가? (NWDAF→인프라) | 3GPP scope 밖 = 위반 아님, operator-specific implementation | B8, B9 |
+| 13 | 전환 중 패킷 drop은? | ip -batch로 μs 단위 gap, cost-benefit으로 정량화 | B7 |
+| 14 | 기존 연구와 뭐가 다른가? | 기존은 판단까지, 본 연구는 인프라 실행 + 무중단 + 검증 | A8, A12 |
 
 ---
 

@@ -124,11 +124,23 @@ with st.sidebar:
         st.warning("아직 테스트 데이터가 없습니다.\n\n"
                    "```bash\n"
                    "cd /home/ubuntu/free5gc-k8s-arm/traffic-profiles\n"
-                   "./run.sh profiles/upf-stress.yaml\n"
+                   "./quick-test.sh macvlan 60\n"
                    "```")
         st.stop()
 
-    selected_run = st.selectbox("Run ID", runs)
+    selected_run = st.selectbox("Run 1 (Primary)", runs, index=0)
+
+    # Run 2 (비교용, optional)
+    run2_options = ["(없음)"] + runs
+    selected_run2 = st.selectbox("Run 2 (Compare)", run2_options, index=0)
+    if selected_run2 == "(없음)":
+        selected_run2 = None
+
+    st.divider()
+    if selected_run2:
+        st.success(f"📊 비교 모드: 2개 Run")
+    else:
+        st.info("📊 단일 Run 모드")
 
     st.divider()
     st.header("📋 프로파일 목록")
@@ -172,8 +184,18 @@ with tab_cpu:
             resources = data["resources"]
             if resources:
                 cpus = [r["cpu_milli"] for r in resources]
-                # 시간축 생성 (인덱스 기반)
-                chart_data[pod_name[:25]] = cpus
+                label = f"[{selected_run[:15]}] {pod_name[:20]}"
+                chart_data[label] = cpus
+
+        # Run 2 오버레이
+        if selected_run2:
+            _, _, _, pods2 = load_run_data(selected_run2)
+            for pod_name, data in pods2.items():
+                resources = data["resources"]
+                if resources:
+                    cpus = [r["cpu_milli"] for r in resources]
+                    label = f"[{selected_run2[:15]}] {pod_name[:20]}"
+                    chart_data[label] = cpus
 
         if chart_data:
             # 길이 맞추기
@@ -202,6 +224,19 @@ with tab_mem:
             resources = data["resources"]
             if resources:
                 mems = [r["mem_mi"] for r in resources]
+                label = f"[{selected_run[:15]}] {pod_name[:20]}"
+                chart_data[label] = mems
+
+        # Run 2 오버레이
+        if selected_run2:
+            _, _, _, pods2 = load_run_data(selected_run2)
+            for pod_name, data in pods2.items():
+                resources = data["resources"]
+                if resources:
+                    mems = [r["mem_mi"] for r in resources]
+                    label = f"[{selected_run2[:15]}] {pod_name[:20]}"
+                    chart_data[label] = mems
+                mems = [r["mem_mi"] for r in resources]
                 chart_data[pod_name[:25]] = mems
 
         if chart_data:
@@ -216,22 +251,45 @@ with tab_mem:
 with tab_loss:
     st.subheader("UPF Packet Loss")
 
+    import pandas as pd
+    loss_chart = {}
+
     upf_pods = {k: v for k, v in pods.items() if "upf" in k.lower()}
     if upf_pods:
         for pod_name, data in upf_pods.items():
             pl = data["packet_loss"]
             if pl:
-                st.write(f"**{pod_name}**")
                 losses = [r.get("loss_pct", 0) for r in pl]
-                st.line_chart(losses, height=200)
+                loss_chart[f"[{selected_run[:15]}] {pod_name[:20]}"] = losses
 
+    # Run 2 오버레이
+    if selected_run2:
+        _, _, _, pods2 = load_run_data(selected_run2)
+        upf_pods2 = {k: v for k, v in pods2.items() if "upf" in k.lower()}
+        for pod_name, data in upf_pods2.items():
+            pl = data["packet_loss"]
+            if pl:
+                losses = [r.get("loss_pct", 0) for r in pl]
+                loss_chart[f"[{selected_run2[:15]}] {pod_name[:20]}"] = losses
+
+    if loss_chart:
+        max_len = max(len(v) for v in loss_chart.values())
+        for k in loss_chart:
+            loss_chart[k] = loss_chart[k] + [None] * (max_len - len(loss_chart[k]))
+        df = pd.DataFrame(loss_chart)
+        st.line_chart(df, height=400)
+
+        # 요약 메트릭
+        for label, losses in loss_chart.items():
+            valid = [l for l in losses if l is not None]
+            if valid:
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Mean Loss", f"{sum(losses)/len(losses):.4f}%")
+                    st.metric(f"{label} Mean", f"{sum(valid)/len(valid):.4f}%")
                 with col2:
-                    st.metric("Max Loss", f"{max(losses):.4f}%")
+                    st.metric(f"Max", f"{max(valid):.4f}%")
                 with col3:
-                    st.metric("Samples", len(losses))
+                    st.metric(f"Samples", len(valid))
     else:
         st.info("UPF packet loss 데이터 없음")
 

@@ -2,26 +2,39 @@
 
 ARM64 환경에서 free5GC 5G 코어 네트워크를 소스 레벨부터 수정하고, 빌드 → Docker 이미지 → K8s 배포까지 한 번에 돌려서 바로 동작을 확인할 수 있는 개발/테스트 환경입니다.
 
-추가로, **NWDAF ML 모델 기반 동적 CNI 전환(DRANET)** 연구 환경을 포함합니다.
+추가로, **NWDAF ML 모델 기반 동적 CNI 전환(커널 IP 이동 방식)** 연구 환경을 포함합니다.
 
 **핵심 워크플로우:**
 ```
-소스 수정 → 빌드 → Docker → K8s 배포 → NWDAF/DRANET 실험 → 결과 분석
+소스 수정 → 빌드 → Docker → K8s 배포 → NWDAF 실험 → 결과 분석
 ```
 
-## Research: NWDAF + DRANET Dynamic CNI Switching
+## Research: NWDAF + Zero-Downtime CNI Backend Switching
 
-NWDAF(Network Data Analytics Function)가 UPF의 KPI를 ML로 분석하여, DRANET을 통해 CNI backend(ipvlan↔macvlan)를 런타임에 동적 전환하는 closed-loop 시스템.
+NWDAF(Network Data Analytics Function)가 UPF의 KPI를 ML로 분석하여, 커널 수준 IP 이동(`ip -batch`)으로 CNI backend(ipvlan↔macvlan)를 Pod 재시작 없이 무중단 전환하는 closed-loop 시스템.
+
+### 전환 메커니즘
+
+UPF Pod에 macvlan과 ipvlan 인터페이스를 **동시에 미리 attach**(Multus)하고, NWDAF의 판단에 따라 IP 주소를 인터페이스 간 이동하여 전환합니다. UPF 프로세스 재시작 없이 커널 레벨에서 패킷 경로만 변경됩니다.
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  NWDAF AnLF │────>│  ML 분류    │────>│   DRANET    │
-│ (KPI 수집)  │     │(ipvlan/mac) │     │(전환 실행)  │
-└─────────────┘     └─────────────┘     └─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌──────────────────┐
+│  NWDAF AnLF │────>│  ML 분류    │────>│  ip -batch 실행  │
+│ (KPI 수집)  │     │(ipvlan/mac) │     │ (커널 IP 이동)   │
+└─────────────┘     └─────────────┘     └──────────────────┘
        │                                        │
-   kubectl top                          ResourceClaim
-   /proc/net/dev                        DeviceClass 변경
+   kubectl top                          ip addr del/add
+   /proc/net/dev                        (netlink → 커널 메모리)
 ```
+
+### 왜 이 방식인가
+
+| | Pod 재생성 | Multus Dynamic | 본 프로젝트 (IP 이동) |
+|--|-----------|----------------|---------------------|
+| IP 변경 | ⭕ | ⭕ | ❌ (불변) |
+| GTP-U/PFCP 세션 | 끊김 | 끊김 위험 | 유지 |
+| 전환 시간 | 수 초 | 수 초 | ~140ms |
+| UPF 재시작 | 필요 | 가능 | 불필요 |
 
 ## Structure
 
@@ -31,19 +44,19 @@ free5gc-k8s-arm/
 │   ├── infra-setup.sh       #   K8s, Docker, CNI, Go 설치
 │   ├── clone-source.sh      #   NF 소스 clone
 │   ├── build.sh             #   NF 바이너리 빌드
-│   ├── docker-build.sh      #   Docker 이미지 빌드 (NWDAF 포함)
+│   ├── docker-build.sh      #   Docker 이미지 (NWDAF 포함)
 │   └── deploy.sh            #   K8s 배포
 ├── free5gc_source/          # NF별 소스 코드
 ├── free5gc_build/           # 빌드된 바이너리
 ├── arm_docker/              # Docker image sources
 ├── arm_k8s/                 # Kubernetes manifests
 │   ├── mongodb/
-│   ├── networks5g/          #   Multus NAD (레거시, DRANET으로 교체 예정)
+│   ├── networks5g/          #   Multus NAD (ipvlan + macvlan dual-attach)
 │   ├── free5gc/             #   Core NF deployments
 │   ├── free5gc-webui/
 │   ├── ueransim/            #   gNB + UE
 │   ├── subscriber/
-│   ├── dranet/              #   ★ DRANET (DeviceClass, ResourceClaim, 전환 스크립트)
+│   ├── dranet/              #   전환 스크립트 (nwdaf-switch.sh)
 │   └── nwdaf/               #   ★ NWDAF NF (ML 엔진, 모델, Dockerfile, K8s manifests)
 ├── traffic-profiles/        # ★ 트래픽 생성 + 실험 프레임워크
 │   ├── profiles/            #   트래픽 프로파일 (APN, 시나리오)
@@ -91,13 +104,13 @@ for f in experiments/experiment-*.yaml; do
 done
 ```
 
-### 4. NWDAF 수동 제어
+### 4. CNI 전환 제어
 
 ```bash
-./arm_k8s/dranet/nwdaf-switch.sh on       # NWDAF 활성화
+./arm_k8s/dranet/nwdaf-switch.sh on       # NWDAF 자동 전환 활성화
 ./arm_k8s/dranet/nwdaf-switch.sh off      # NWDAF 비활성화
-./arm_k8s/dranet/nwdaf-switch.sh ipvlan   # CNI 수동 전환
-./arm_k8s/dranet/nwdaf-switch.sh macvlan  # CNI 수동 전환
+./arm_k8s/dranet/nwdaf-switch.sh ipvlan   # CNI 수동 전환 (ip addr 이동)
+./arm_k8s/dranet/nwdaf-switch.sh macvlan  # CNI 수동 전환 (ip addr 이동)
 ./arm_k8s/dranet/nwdaf-switch.sh status   # 현재 상태 확인
 ```
 
@@ -113,40 +126,90 @@ T3 소→대         ✓                 ✓                  ✓ (핵심)
 - A, B: baseline (ground truth)
 - C-T3: **핵심 실험** — NWDAF가 트래픽 패턴 변화를 감지하고 전환 판단
 
+## Network Architecture
+
+```
+                    enp0s6 (물리 NIC — 커널-하드웨어 인터페이스)
+                       │
+         ┌─────────────┼──────────────┐
+         │             │              │
+      n3br (bridge)  n3br-ipv (bridge)
+         │             │
+   macvlan: UPF n3   ipvlan: UPF n3i     ← 둘 다 미리 attach
+         │             │
+         └──── veth pair ────┘            ← 같은 L2 도메인
+                       │
+              IP: 10.10.3.1/24            ← 한 쪽에만 존재, 전환 시 이동
+
+Calico (default CNI)   → Pod-to-pod SBI communication
+Multus + ipvlan/macvlan → 5G data plane interfaces
+  ├── N3 (10.10.3.0/24): UPF ↔ gNB (GTP-U user data)
+  ├── N4 (10.10.4.0/24): SMF ↔ UPF (PFCP control)
+  └── N6: UPF ↔ DN (일반 IP)
+```
+
 ## NWDAF Architecture (3GPP TS 23.288 Rel-17)
 
 | 기능 | 구현 | 파일 |
 |------|------|------|
 | AnLF (추론) | ✅ | `arm_k8s/nwdaf/src/nwdaf-engine.py` |
 | MTLF (학습) | ✅ | `arm_k8s/nwdaf/src/train-model.py` |
-| ML Model | RandomForest | `arm_k8s/nwdaf/src/model/nwdaf-classifier.pkl` |
-| 전환 실행 | DRANET | `arm_k8s/dranet/nwdaf-switch.sh` |
+| ML Model | RandomForest (5 features) | `arm_k8s/nwdaf/src/model/nwdaf-classifier.pkl` |
+| 전환 실행 | `ip -batch` (커널 IP 이동) | `arm_k8s/dranet/nwdaf-switch.sh` |
 | 데이터 수집 | OAM 경로 | kubectl top + /proc/net/dev |
 
-## Network Architecture
+### ML Features
+
+| Feature | 역할 |
+|---------|------|
+| throughput_mbps | 현재 처리량 |
+| total_pps | 초당 패킷 수 |
+| packet_loss_pct | 패킷 손실률 — 현재 CNI 한계 감지 |
+| cpu_milli | UPF CPU 사용량 |
+| mem_mi | UPF 메모리 사용량 |
+
+## Key Design Decisions
+
+| 결정 | 이유 |
+|------|------|
+| 커널 IP 이동 (DRANET 미채택) | DRANET은 ipvlan↔macvlan 서브인터페이스 전환 미지원 |
+| dual-bridge 구조 | 커널이 같은 master에 macvlan+ipvlan 동시 생성 불가 → 별도 bridge + veth pair |
+| OAM 수집 경로 | free5GC에 Nupf Event Exposure 미구현 + 측정 대상 성능 무영향 |
+| Random Forest | ARM64 추론 <1ms, feature importance 해석 가능, 학계 선례 |
+| ARM64 플랫폼 | 커널 경로 차이에 따른 KPI 변화가 x86보다 크게 관측됨 → 실험 민감도 향상 |
+
+## Infrastructure Spec
+
+| 항목 | 스펙 |
+|------|------|
+| Cloud | Oracle Cloud Infrastructure (OCI) |
+| Region | ap-chuncheon-1 (춘천) |
+| Instance | VM.Standard.A1.Flex |
+| CPU | ARM Neoverse-N1, 4 vCPU |
+| Memory | 24 GB |
+| OS | Ubuntu 22.04.5 LTS |
+| Kernel | 6.8.0-1058-oracle (aarch64) |
+| NIC | enp0s6 (virtio-net) |
+
+### CPU 할당
 
 ```
-Calico (default CNI)  → Pod-to-pod SBI communication
-DRANET (ipvlan/macvlan) → 5G data plane interfaces
-  ├── N3 (10.10.3.0/24): UPF ↔ gNB (GTP-U user data)
-  └── N4 (10.10.4.0/24): SMF ↔ UPF (PFCP control)
+CPU 0, 1  →  UPF 전용 (K8s CPU Manager static policy)
+CPU 2     →  traffic-gen (iperf3)
+CPU 3     →  시스템 (NFs, NWDAF, monitor, kubelet)
 ```
 
-## CPU Isolation (Experiment)
-
-```
-CPU 0, 1  →  UPF 전용 (Guaranteed QoS, CPU Manager static)
-CPU 2     →  traffic-gen 전용
-CPU 3     →  나머지 (NFs, NWDAF, monitor, kubelet)
-```
+단일 노드 4코어 환경에서 격리 실험 수행. IETF BMWG "consistent CPU pinning" 준수.
 
 ## Prerequisites
 
-- ARM64 Kubernetes cluster (kubeadm, **v1.32+** for DRA/DRANET)
-- DRANET DaemonSet
-- containerd with NRI enabled
-- Docker + Go toolchain
+- ARM64 Linux (tested: Ubuntu 22.04 on OCI A1.Flex)
+- Kubernetes v1.28+ (kubeadm)
+- Multus CNI
+- containerd
+- Docker + Go toolchain (for source build)
 - Python 3.11+ (numpy, scikit-learn, joblib)
+- gtp5g 커널 모듈 (free5GC UPF용)
 
 ## References
 

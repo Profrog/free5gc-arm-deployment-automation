@@ -293,20 +293,19 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [10] LLM-Enabled NWDAF: A Step Toward AI-Native 6G Network Intelligence
+## [10] NWDAF 관련 유사 연구 비교
 
-- **저자**: (University of Waterloo 등)
-- **출처**: arXiv:2606.11877, Jun 2026
-- **URL**: https://arxiv.org/abs/2606.11877
+| 연구 | NWDAF 구현 | ML 모델 | 대상 NF | 실행(Action) | closed-loop | 본 연구와의 차이 |
+|------|-----------|---------|---------|-------------|-------------|-----------------|
+| Ardestani 2025 (Waterloo) | ✅ 3GPP 준수 | Graph-based RF | UPF | PDU session release | ✅ | 보안(bot detection), CNI 전환 아님 |
+| LLM-NWDAF 2026 (Waterloo) | ✅ | LLM | 전체 NF | 분석만 (실행 없음) | ❌ | 분석 강화 목적, 인프라 실행 없음 |
+| Bayleyegn 2024 (NetSoft) | ✅ | Random Forest | UPF | 트래픽 분류 | ❌ | 분류만, 전환 실행 없음 |
+| Kan 2024 | ✅ | LLM | 전체 | 정책 제안 | ❌ | 제안만, 자동 실행 없음 |
+| **본 연구** | **✅ AnLF** | **Random Forest** | **UPF** | **CNI 전환 (ip -batch)** | **✅** | **인프라 레이어까지 실행 + 무중단** |
 
-### 핵심 내용
-- Open-source NWDAF 구현의 한계점 지적
-- NWDAF에 LLM을 붙여 자연어 기반 네트워크 분석 제안
-- closed-loop automation의 필요성 강조
-
-### 본 연구와의 차이
-- [9]는 NWDAF + LLM (분석 강화)
-- 본 연구는 NWDAF + IP 이동 방식 (실행 강화, 인프라 레이어까지 closed-loop)
+### 핵심 차별점
+- 기존 연구: NWDAF의 **분석/판단**까지만 구현 (실행은 수동 또는 NF 레벨)
+- 본 연구: NWDAF의 판단을 **인프라 레이어(커널 CNI 전환)까지 자동 실행**하고, 그 판단의 정확성을 검증
 
 ---
 

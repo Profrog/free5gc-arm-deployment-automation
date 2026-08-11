@@ -323,115 +323,39 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ## [11] CNI 타입별 성능 차이 근거 — 전환 판단의 유효성 뒷받침
 
-> **핵심 질문**: "네트워크 인터페이스를 전환한 뒤 KPI를 비교해서 '이 전환이 올바랐다'고 판단하는 방법론이 유효한가?"
+> **핵심 질문**: "CNI를 바꾸면 KPI가 실제로 변하는가?" + "전후 비교로 판단을 평가하는 게 유효한가?"
 
-이 질문은 두 가지를 요구한다:
-1. CNI 타입이 KPI에 인과적 영향을 준다 (바꾸면 실제로 KPI가 변한다)
-2. KPI 변화를 보고 판단의 적합성을 평가하는 것이 유효한 방법이다
+### A. CNI 차이가 측정 가능하다
 
----
+| 논문 | 출처 | 결과 | 본 연구에서의 의의 |
+|------|------|------|-------------------|
+| [macvlan/ipvlan 성능 분석](https://www.shs-conferences.org/articles/shsconf/abs/2023/15/shsconf_eimm2023_01072/shsconf_eimm2023_01072.html) | SHS 2023 | ipvlan이 일반 환경에서 더 나은 성능 | 전환이 측정 가능한 차이를 만듦 |
+| [K8s CNI Latency Evaluation](https://www.mdpi.com/2079-9292/13/19/3972) | MDPI Electronics 2024 | workload별 최적 CNI가 다름 | 동적 전환의 당위성 |
+| [Edge 환경 CNI 성능](https://arxiv.org/abs/2401.07674) | IEEE INFOCOM Workshop 2024 | 자원 제약 환경에서 CNI 차이가 더 큼 | ARM64 환경에서 차이 관측이 용이 |
+| [Bare-Metal vs K8s 5GC](https://www.researchgate.net/publication/384801122) | ResearchGate 2024 | K8s 위 5GC가 bare-metal 대비 throughput 7%↓ | CNI가 5GC 성능의 실질적 병목 |
+| [CNI Plugin 벤치마크](https://par.nsf.gov/servlets/purl/10299326) | NSF/IEEE 2021 | CNI별 throughput/latency 체계적 비교 | iperf3 + 반복 측정 방법론 참조 |
 
-### A. 직접 근거: macvlan/ipvlan 성능 차이가 측정 가능함
+### B. "전후 KPI 비교"가 유효한 평가 방법이다
 
-#### [10-A1] Container network architecture and performance analysis of Macvlan and IPvlan (SHS 2023)
+| 표준/프레임워크 | 출처 | 핵심 | 본 연구에서의 의의 |
+|----------------|------|------|-------------------|
+| 3GPP TS 23.288 NWDAF Feedback Loop | 3GPP | 판단→실행→KPI 관측→정확성 평가 | 본 연구의 검증 방식 = 표준 패턴 |
+| [ETSI ZSM 002](https://www.etsi.org/deliver/etsi_gs/ZSM/001_099/002/) | ETSI 2022 | Intent→Decision→Execution→Observation | 표준 자동화 평가 절차에 부합 |
+| ITU-T Y.1731 | ITU 2020 | 변경 전후 PM 비교로 효과 판단 | 통신 업계 표준 운용 절차 |
+| [ETSI NFV-TST 009](https://www.etsi.org/deliver/etsi_gs/NFV-TST/001_099/009/) | ETSI 2018 | 인프라 변경의 영향을 KPI로 정량화 | CNI 변경 효과 측정의 표준 근거 |
+| O-RAN AI/ML Workflow | O-RAN WG2 2023 | action 전후 KPI로 모델 평가 | 통신 AI에서의 업계 표준 방법 |
 
-- **출처**: SHS Web of Conferences, EIMM 2023
-- **URL**: https://www.shs-conferences.org/articles/shsconf/abs/2023/15/shsconf_eimm2023_01072/shsconf_eimm2023_01072.html
-- **결과**: ipvlan이 일반 환경에서 더 나은 network performance
-- **의의**: macvlan ↔ ipvlan 전환이 throughput/latency에 **측정 가능한 차이**를 만듦을 실증
+### C. 커널 메커니즘: 왜 macvlan/ipvlan이 KPI에 차이를 만드는가
 
-#### [10-A2] Performance and Latency Efficiency Evaluation of K8s CNIs (MDPI Electronics, 2024)
+| 논문 | 출처 | 핵심 내용 | 본 연구에서의 의의 |
+|------|------|----------|-------------------|
+| [IPVLAN — The Beginning](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf) | netdev 0.1, Bandewar/Google 2015 | ipvlan: 커널 L3 라우팅 / macvlan: NIC 레벨 MAC 분리 | 고부하 시 macvlan 유리, 저부하 시 ipvlan 유리의 기술적 원인 |
+| [Data Plane Optimization](https://www.researchgate.net/publication/221198708) | ACM SIGCOMM Workshop 2011 | macvlan NAPI vs softnet queue throughput 차이 | 커널 경로 차이 → 측정 가능한 성능 차이 |
+| [Linux Networking CPU Impact](https://netdevconf.org/0x17/docs/netdev-0x17-paper34-talk-slides/) | NetDev 0x17, 2023 | 인터페이스 타입별 패킷당 CPU cycle 정량화 | CNI 타입 → CPU 사용량 인과관계 근거 |
 
-- **출처**: Electronics 13(19), 3972, 2024
-- **URL**: https://www.mdpi.com/2079-9292/13/19/3972
-- **결과**: CNI 선택에 따라 packet size/workload별 성능이 유의미하게 달라짐
-- **의의**: one-size-fits-all CNI는 없으며, workload 조건에 따라 최적 CNI가 달라짐 → 동적 전환의 당위성
+### 핵심 요약
 
-#### [10-A3] Performance Evaluation of K8s Networking in Constraint Edge Environments (IEEE INFOCOM Workshop, 2024)
-
-- **출처**: IEEE INFOCOM ICCN Workshops, Vancouver, 2024
-- **URL**: https://arxiv.org/abs/2401.07674
-- **결과**: 자원 제약(Edge) 환경에서 CNI별 throughput/CPU/memory 차이가 더 크게 나타남
-- **의의**: ARM64와 유사한 제약 환경에서 CNI → KPI 인과관계가 더 명확
-
-#### [10-A4] Bare-Metal vs Kubernetes for 5G Core (2024)
-
-- **출처**: ResearchGate, 2024
-- **URL**: https://www.researchgate.net/publication/384801122
-- **결과**: K8s 위 5GC가 bare-metal 대비 throughput 7% 감소 (300+ UE)
-- **의의**: K8s 네트워킹 레이어가 5GC 성능의 실질적 병목. CNI 최적화가 5GC KPI에 직접 영향
-
-#### [10-A5] Assessing Container Network Interface Plugins (IEEE SRDS, 2021)
-
-- **출처**: NSF/IEEE, 2021
-- **URL**: https://par.nsf.gov/servlets/purl/10299326
-- **결과**: CNI별 throughput/latency/scalability 체계적 비교 (macvlan 포함)
-- **의의**: CNI 벤치마킹 방법론의 선례. iperf3 + 반복 측정 + 통계 처리 방법 참고
-
----
-
-### B. 방법론 근거: "전환 후 KPI 비교"가 유효한 평가 방법인 이유
-
-#### [10-B1] 3GPP TS 23.288 — NWDAF Analytics Feedback Loop
-
-- NWDAF는 "판단 → 실행 → KPI 관측 → 정확성 평가" closed-loop으로 설계됨
-- Analytics accuracy를 실행 전후 KPI 비교로 측정하도록 표준이 정의
-- **의의**: 본 연구의 검증 방식은 3GPP 표준이 의도한 패턴 그 자체
-
-#### [10-B2] ETSI GS ZSM 002 — Zero-touch Service Management Reference Architecture (2022)
-
-- **URL**: https://www.etsi.org/deliver/etsi_gs/ZSM/001_099/002/
-- Closed-loop: Intent → Decision → Execution → Observation → Evaluation
-- "판단의 올바름"은 Observation 단계에서 KPI가 Intent 방향으로 변했는지로 평가
-- **의의**: ETSI가 정의한 자동화 시스템의 표준 평가 절차에 부합
-
-#### [10-B3] ITU-T Y.1731 — Ethernet OAM Performance Monitoring (2020)
-
-- Frame delay, frame loss ratio, throughput을 측정하여 configuration 변경의 효과를 판단
-- 네트워크 변경 전후 PM(Performance Monitoring) 값 비교는 **통신 업계 표준 운용 절차**
-- **의의**: "변경 전후 KPI 비교"가 통신에서 보편적으로 인정된 방법론
-
-#### [10-B4] ETSI GS NFV-TST 009 — NFVI Networking Benchmarks (2018)
-
-- **URL**: https://www.etsi.org/deliver/etsi_gs/NFV-TST/001_099/009/
-- 인프라 레이어 변경의 영향을 throughput/latency/frame loss로 정량화하는 방법 정의
-- **의의**: CNI(인프라) 변경의 효과를 KPI로 측정/비교하는 방법론 자체의 표준적 근거
-
-#### [10-B5] O-RAN AI/ML Workflow (O-RAN.WG2.AIML-v01.03, 2023)
-
-- Near-RT RIC: ML model 결정 → 실행 → KPI 관측으로 모델 평가
-- Model performance는 action 전후 KPI 변화의 통계적 유의성으로 판단
-- **의의**: 통신 AI 시스템에서 "실행 후 KPI 비교"가 판단 정확성 평가의 **업계 표준 방법**
-
----
-
-### C. 커널 레벨 기술 근거: 왜 macvlan/ipvlan이 KPI에 차이를 만드는가
-
-#### [10-C1] IPVLAN — The Beginning (netdev 0.1, Mahesh Bandewar/Google, 2015)
-
-- **URL**: http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf
-- ipvlan: MAC 공유 → 커널 내부 L3 라우팅 (CPU-bound)
-- macvlan: 별도 MAC → NIC 하드웨어 레벨 패킷 분리 (NIC-offload 가능)
-- **의의**: 고부하 시 macvlan 유리, 저부하 시 ipvlan 오버헤드 적음의 **기술적 원인** 설명
-
-#### [10-C2] Data Plane Optimization in Open Virtual Routers (ACM SIGCOMM Workshop, 2011)
-
-- **URL**: https://www.researchgate.net/publication/221198708
-- macvlan의 NAPI 기반 패킷 전달 vs softnet queue 경유의 throughput 차이 측정
-- **의의**: 커널 패킷 처리 경로 차이가 측정 가능한 성능 차이를 만듦을 실증
-
-#### [10-C3] Assessing the Impact of Linux Networking on CPU Consumption (NetDev 0x17, 2023)
-
-- **URL**: https://netdevconf.org/0x17/docs/netdev-0x17-paper34-talk-slides/
-- Linux 네트워킹 스택 경로별 CPU cycle 소비 정량화
-- 인터페이스 타입에 따라 패킷당 CPU cost가 다름
-- **의의**: CNI 타입 → CPU 사용량 인과관계의 커널 레벨 근거
-
----
-
-### 논문에서의 활용 (Related Work / Background)
-
-> "선행연구[10-A1][10-A2][10-A3]에서 컨테이너 네트워크 인터페이스 유형(macvlan, ipvlan)에 따라 throughput, latency, CPU 사용량이 유의미하게 달라짐이 확인되었으며, 이 차이는 커널 레벨의 패킷 처리 경로 차이[10-C1][10-C2][10-C3]에 기인한다. 또한 5G Core를 Kubernetes 위에 배포할 경우 네트워킹 오버헤드가 직접적 성능 병목[10-A4]이 된다. 한편, 전환 실행 후 KPI 비교로 판단의 올바름을 검증하는 방식은 3GPP NWDAF의 analytics feedback loop[10-B1], ETSI ZSM의 closed-loop automation[10-B2], ITU-T Y.1731의 performance monitoring[10-B3], 그리고 O-RAN AI/ML workflow[10-B5]에서 공통적으로 채택하는 표준적 평가 방법론이다. 그러나 기존 연구는 모두 정적 비교에 그쳤으며, 런타임에 동적으로 전환하고 그 판단의 정확성을 자동 검증하는 시스템을 구현한 연구는 없다."
+기존 연구는 모두 **정적 비교**에 그쳤으며, 런타임에 동적으로 전환하고 그 판단의 정확성을 자동 검증하는 시스템을 구현한 연구는 없다.
 
 ---
 

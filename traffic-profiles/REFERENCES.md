@@ -263,11 +263,9 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **출처**: 3GPP, Release 17
 - **URL**: https://www.3gpp.org/DynaReport/29244.htm
 
-### 본 연구 관련 내용
-- PFCP Session Establishment/Modification/Deletion 절차
-- Usage Reporting Rule (URR): UPF가 SMF에 주기적 usage report 전송
-- 본 연구에서 NWDAF는 커널 통계(/proc/net/dev) 및 kubectl top을 통해 KPI를 직접 수집
-- **CNI 전환은 PFCP 절차와 독립** — 전환 전후 PFCP 세션 유지됨
+### 본 연구와의 관계
+- **무중단 전환의 세션 유지 논증 근거**: CNI 전환 시 IP가 불변이므로 PFCP 세션(SMF↔UPF)이 끊기지 않음을 이 표준으로 정당화
+- PFCP 세션은 IP 주소 기반으로 유지됨 → IP 이동 방식은 세션에 투명
 
 ---
 

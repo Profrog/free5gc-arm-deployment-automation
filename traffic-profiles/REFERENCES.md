@@ -439,6 +439,19 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ---
 
+## [A12] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 (Gap 도출)
+
+> 선행연구 3단계를 연결하여 본 연구의 gap을 도출하는 논리 체인.
+
+| Step | 선행연구 | 핵심 | Gap |
+|------|---------|------|-----|
+| 1. Inter-UPF 선택 | [Bellin 2025 (IFIP)](https://networking.ifip.org/2025/images/Net25_papers/1571142002.pdf), [ONDM 2021](https://dl.ifip.org/db/conf/ondm/ondm2021/1570718826.pdf) | "어떤 UPF를 쓸지" 동적 결정 | UPF 내부는 고정 가정 |
+| 2. UPF 구현별 성능 차이 | [Christakis 2024 (INFOCOM)](https://www.researchgate.net/publication/383111414), [A2] | 같은 기능인데 구현에 따라 5배 차이 | 런타임 전환 없음 |
+| 3. Intra-UPF 경로 전환 | [BPF/XDP UPF (MDPI 2022)](https://www.mdpi.com/2079-9292/11/7/1022), [HiP4-UPF (ATC'24)](https://www.usenix.org/biblio-14562), [Fastlane (2024)](https://arxiv.org/abs/2410.11345) | 런타임에 처리 경로 전환 가능 | **판단 자동화 부재** |
+| **4. 본 연구** | — | NWDAF analytics로 Step 3을 자동 판단 + 무중단 실행 | ★ Gap 충족 |
+
+---
+
 # B. 본 연구의 설계 결정
 
 ---
@@ -1200,160 +1213,8 @@ Intra-UPF 최적화 (본 연구):
 - Analytics output의 소비자(SMF, PCF, AMF)별 활용 방식 정의
 - **본 연구와의 관계**: 표준 소비자는 control plane NF, 본 연구는 infrastructure actuator를 소비자로 확장
 
----
 
-## [B10] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
-
-### 핵심 논리
-
-> "어떤 UPF를 쓸지" 문제가 "그 UPF 안에서 패킷을 어떻게 처리할지" 문제로
-> 자연스럽게 확장될 수 있음을 보이는 선행연구 chain.
-
-### 논리 체인 (Gap 도출)
-
-```
-Step 1: UPF 선택이 성능에 영향을 준다 (Inter-UPF)
-  → [N] Dynamic UPF Selection, [O] Joint UPF Placement
-  → "어떤 UPF를 쓰느냐에 따라 latency, throughput이 달라진다"
-
-Step 2: 같은 UPF라도 내부 구현에 따라 성능이 크게 다르다 (Implementation)
-  → [P] Evaluation of UPF Implementations (INFOCOM 2024)
-  → [Q] s5uishida benchmark
-  → "go-upf vs VPP-UPF vs eUPF: 같은 기능인데 5배 성능 차이"
-
-Step 3: UPF 내부 패킷 처리 경로를 런타임에 바꿀 수 있다 (Intra-UPF path switching)
-  → [R] Run-Time Adaptive BPF/XDP for 5G UPF
-  → [S] HiP4-UPF (USENIX ATC'24)
-  → [T] Fastlane (IIT Bombay 2024)
-  → "같은 UPF 내에서도 처리 경로를 동적으로 전환 가능"
-
-Step 4: 그런데 이 전환을 트래픽 특성에 따라 자동으로 판단하는 시스템은 없다
-  → ★ 본 연구의 Gap
-  → "Step 1~3은 각각 존재하지만, NWDAF analytics로 Step 3을 자동화한 연구는 없다"
-```
-
-### 참고 문헌
-
-#### [N] Dynamic Energy-Efficient User Plane Function Selection in 5G Networks
-- **저자**: Bellin et al.
-- **출처**: IFIP Networking 2025
-- **URL**: https://networking.ifip.org/2025/images/Net25_papers/1571142002.pdf
-- **핵심 내용**:
-  - UPF 선택을 동적으로 수행하여 에너지 효율 최적화
-  - 선택 기준: real-time power consumption + latency/bandwidth requirements
-  - **시사점**: "어떤 UPF를 쓸지"를 동적으로 결정하는 연구는 활발하다.
-    그러나 "선택된 UPF 내부에서 어떻게 처리할지"는 고정으로 가정.
-- **본 연구와의 관계**: inter-UPF 최적화의 선행연구. 본 연구는 이를 intra-UPF로 확장.
-
-#### [O] Dynamic Selection of User Plane Function in 5G Environments
-- **저자**: [ONDM 2021]
-- **출처**: IFIP/IEEE ONDM 2021
-- **URL**: https://dl.ifip.org/db/conf/ondm/ondm2021/1570718826.pdf
-- **핵심 내용**:
-  - Evolutionary Game Theory 기반 UPF 선택 모델
-  - 서비스 지연 최소화를 위한 동적 UPF 할당
-  - **시사점**: UPF "선택"은 최적화 대상으로 인정되지만,
-    선택된 UPF의 내부 처리 메커니즘은 다루지 않음.
-
-#### [P] Evaluation of User Plane Function Implementations in Real-World 5G Networks
-- **저자**: Sokratis Christakis, Theodoros Tsourdinis, Nikos Makris, Thanasis Korakis, Serge Fdida
-- **출처**: IEEE INFOCOM 2024 Workshops
-- **URL**: https://www.researchgate.net/publication/383111414
-- **핵심 내용**:
-  - 실제 5G 환경에서 다양한 UPF 구현(kernel-based, DPDK, XDP) 성능 비교
-  - 같은 UPF 기능이라도 내부 구현 방식에 따라 throughput/latency가 크게 상이
-  - **시사점**: UPF 내부 패킷 처리 경로가 성능의 결정적 요인임을 실증.
-    "어떤 UPF를 쓸지"뿐 아니라 "어떤 처리 경로를 쓸지"가 중요함의 근거.
-- **본 연구와의 관계**: 처리 경로(macvlan vs ipvlan)에 따른 성능 차이가 최적화 가치가 있음의 직접 근거.
-
-#### [Q] Simple Measurement of UPF Performance (s5uishida)
-- **이미 [2]에서 인용** — go-upf(233Mbps) vs UPG-VPP(1.14Gbps) vs eUPF(359Mbps)
-- **시사점**: 같은 PFCP를 처리하는 UPF라도 데이터플레인 구현에 따라 5배 차이.
-  이는 내부 처리 경로 최적화의 가치를 직접 보여줌.
-
-#### [R] Run-Time Adaptive In-Kernel BPF/XDP Solution for 5G UPF
-- **저자**: Navarro do Amaral, T.A.; Rosa, R.V.; Moura, D.F.C.; Esteve Rothenberg, C.
-- **출처**: MDPI Electronics 2022, 11(7), 1022
-- **URL**: https://www.mdpi.com/2079-9292/11/7/1022
-- **핵심 내용**:
-  - UPF 내부에서 BPF 프로그램을 **런타임에** 교체하여 패킷 처리 로직 변경
-  - JIT 컴파일 오버헤드를 95% 감소시키는 설계로 빠른 적응(adaptation) 달성
-  - 10-11 Mpps 성능 유지하면서 런타임 경로 변경 가능
-  - **시사점**: UPF 내부 패킷 처리 경로의 **런타임 전환**이 기술적으로 가능함을 실증.
-    단, 이 논문은 "언제 전환할지"의 판단 로직(analytics)은 다루지 않음.
-- **본 연구와의 관계**: [R]은 "전환 가능성"을 보여주고, 본 연구는 "전환 판단 자동화"를 추가.
-  [R]의 actuation 기술 + 본 연구의 NWDAF analytics = 완전한 closed-loop.
-
-#### [S] HiP4-UPF: Towards High-Performance Comprehensive 5G User Plane Function on P4 Programmable Switches
-- **저자**: Wen et al.
-- **출처**: USENIX Annual Technical Conference (ATC'24), July 2024
-- **URL**: https://www.usenix.org/biblio-14562
-- **핵심 내용**:
-  - P4 프로그래머블 스위치에서 UPF 전체 기능 구현
-  - 기존 open-source UPF 대비 9-619% throughput 향상
-  - 패킷 처리 경로를 하드웨어 수준에서 최적화
-  - **시사점**: UPF 성능은 "어떤 하드웨어/소프트웨어 경로로 패킷을 처리하느냐"에
-    결정적으로 의존함을 Top-tier 학회에서 입증.
-    단, 이 논문도 "정적 배포" — 런타임 적응 전환은 다루지 않음.
-- **본 연구와의 관계**: 처리 경로 차이의 성능 영향이 수백% 수준임을 보여주는 상한 참조.
-
-#### [T] Fastlane: Porting Network Applications to Fast Packet I/O Frameworks
-- **저자**: IIT Bombay (Mythili Vutukuru 그룹)
-- **출처**: 2024
-- **URL**: https://www.cse.iitb.ac.in/~mythili/research/papers/2024-fastlane.pdf
-- **핵심 내용**:
-  - 네트워크 애플리케이션의 "fast path"와 "slow path"를 분리
-  - Fast path: DPDK/XDP 등 고속 I/O 경로
-  - Slow path: 전통적 커널 네트워크 스택
-  - 두 경로 간 **런타임 전환** 프레임워크 제공
-  - **시사점**: "같은 애플리케이션이 두 가지 패킷 처리 경로를 가지고,
-    상황에 따라 전환한다"는 개념의 일반화된 선행연구.
-- **본 연구와의 관계**: Fastlane의 "fast/slow path 전환" 개념을
-  5G UPF의 "macvlan/ipvlan 전환"으로 특수화. Fastlane은 범용 프레임워크,
-  본 연구는 5G-specific 적용 + NWDAF 기반 판단 자동화.
-
-### Gap Statement (논문에서의 활용)
-
-> "선행연구는 (1) 동적 UPF 선택(inter-UPF)[N][O], (2) UPF 구현 방식에 따른 성능 차이[P][Q][S],
-> (3) UPF 내부 패킷 처리 경로의 런타임 전환 가능성[R][T]을 각각 입증하였다.
-> 그러나 이 세 가지를 연결하여 — 트래픽 특성을 실시간 관측하고, 최적 처리 경로를
-> 자동으로 판단하며, 무중단으로 전환하는 — end-to-end closed-loop 시스템을
-> 구현한 연구는 존재하지 않는다.
->
-> 특히, inter-UPF 선택[N][O]이 '어떤 노드를 쓸지'를 최적화한다면,
-> 본 연구는 그 다음 단계인 '선택된 노드 내부에서 어떤 커널 경로로 처리할지'를
-> 최적화하는 **intra-UPF 최적화**를 제안한다. 이는 inter-UPF 선택과 직교하며,
-> 기존 시스템에 추가적으로 적용하여 성능을 더 향상시킬 수 있다."
-
-### 시각적 정리: 선행연구 → 본 연구의 위치
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     선행연구 landscape                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  [N][O] Inter-UPF Selection        [P][Q][S] UPF Impl. Comparison│
-│  "어떤 UPF?"                       "어떤 구현이 빠른가?"         │
-│       │                                  │                      │
-│       │                                  │                      │
-│       ▼                                  ▼                      │
-│  ┌─────────────────────────────────────────────┐               │
-│  │ [R][T] Runtime Path Switching 가능           │               │
-│  │ "패킷 처리 경로를 런타임에 바꿀 수 있다"      │               │
-│  └────────────────────┬────────────────────────┘               │
-│                       │                                         │
-│                       │ ← 판단 자동화 부재 (Gap)                 │
-│                       ▼                                         │
-├─────────────────────────────────────────────────────────────────┤
-│  ★ 본 연구                                                      │
-│  NWDAF Analytics + Intra-UPF Path Switching                     │
-│  "언제, 어떤 경로로 전환할지를 자동 판단 + 무중단 실행"           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## [B11] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
+## [B10] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
 
 ### 계층 구조
 

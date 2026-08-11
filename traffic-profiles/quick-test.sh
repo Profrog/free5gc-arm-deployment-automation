@@ -34,20 +34,6 @@ echo "[$(date '+%H:%M:%S')] Starting monitor..."
     --background
 
 # 2.1 트래픽 정보 기록
-cat >> "${MONITOR_DIR}/metadata.json" << EOF2
-{
-    "run_id": "${RUN_ID}",
-    "cni": "${CNI}",
-    "traffic": {
-        "protocol": "UDP",
-        "bandwidth": "500Mbps",
-        "packet_size": "1400B",
-        "duration_sec": ${DURATION},
-        "profile": "large (T1)"
-    }
-}
-EOF2
-# metadata.json을 덮어쓰기 (monitor-collector가 먼저 만듦)
 python3 -c "
 import json
 m = '${MONITOR_DIR}/metadata.json'

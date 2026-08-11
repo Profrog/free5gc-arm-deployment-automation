@@ -124,6 +124,20 @@ done
 ./traffic-profiles/monitor/monitor-collector.sh --stop
 ```
 
+### 6. 빠른 Baseline 테스트 (모니터링 자동 포함)
+
+```bash
+cd traffic-profiles
+
+# macvlan 60초 (CNI 전환 + 모니터링 + iperf3 + 결과 저장)
+./quick-test.sh macvlan 60
+
+# ipvlan 60초
+./quick-test.sh ipvlan 60
+
+# 결과: monitor-data/{cni}_{timestamp}/
+```
+
 ## Experiment Matrix
 
 ```

@@ -182,7 +182,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - UPF forwarding delay는 부하에 비례하여 증가
 - PFCP session modification latency: <200μs (data-plane load 무관)
 
-### 본 프로젝트에서의 차용
+### 본 연구와의 관계
 - **부하 단계별 측정 패턴**: Light/Medium/Heavy → 본 프로젝트 `upf-stress.yaml` Phase 3 (stepped load 6단계)
 - **임계점 탐색**: 부하를 올려가며 "어디서부터 CNI 전환이 필요한가"의 기준점 도출
 - **측정 방식 차이**: 이 논문은 TC-BPF(커널 hook)으로 per-packet delay 측정, 본 프로젝트는 `/proc/net/dev` + iperf3로 throughput/loss 측정
@@ -211,7 +211,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 | free5GC go-upf | 382 Mbps | 23% | 커널 TUN 기반 |
 | Open5GS UPF | 319 Mbps | 30% | 커널 TUN 기반 |
 
-### 본 프로젝트에서의 차용
+### 본 연구와의 관계
 - **성능 기준선**: free5GC go-upf의 x86 성능(200~400Mbps)을 기준으로 ARM64 실험 설계
 - **ARM64 성능 차이 활용**: ARM64에서는 추가 성능 저하 예상(40~60% 수준) → CNI 변경에 따른 KPI 차이가 x86보다 크게 관측됨 → 실험 민감도 향상에 유리
 - **iperf3 -u -b 500M 조건 재현**: 본 프로젝트 `upf-stress.yaml` Phase 2에서 동일 조건으로 ARM64 차이 비교
@@ -224,7 +224,12 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 - **출처**: Intel Network Builders, 2024
 - **URL**: https://builders.intel.com/docs/networkbuilders/5g-flexcore-2-0-user-plane-function...
 - **결과**: 948 Gbps (94.8% line rate), 0% packet loss
-- **비고**: DPDK 기반 상용 UPF. open-source UPF와 2~3 order of magnitude 차이. 논문에서 상한 참조용.
+- **비고**: DPDK 기반 상용 UPF. open-source UPF와 2~3 order of magnitude 차이.
+
+### 본 연구와의 관계
+- **성능 상한 참조**: 상용 UPF(DPDK)의 성능을 upper bound로 제시하여, 오픈소스 커널 기반 UPF의 한계를 맥락화
+- **프로파일 차이**: 이 논문은 line rate 도달 여부만 확인 (pass/fail), 본 프로젝트는 부하 단계별 KPI 변화 추이를 관측 (성능 곡선)
+- **CNI 최적화의 당위성**: 커널 기반 UPF는 DPDK 대비 3자릿수 느림 → 커널 레벨에서의 최적화(CNI 전환)가 실질적 효과를 가짐
 
 ---
 

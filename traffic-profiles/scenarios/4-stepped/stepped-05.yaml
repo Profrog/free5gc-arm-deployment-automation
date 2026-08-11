@@ -4,8 +4,8 @@ packet_size: 1400
 pattern: stepped
 phases:
 - bandwidth: 100M
-  duration: 20
+  duration: 91
 - bandwidth: 200M
-  duration: 30
+  duration: 137
 - bandwidth: 400M
-  duration: 20
+  duration: 92

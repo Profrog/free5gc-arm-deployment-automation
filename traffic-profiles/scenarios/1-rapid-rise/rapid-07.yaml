@@ -4,6 +4,6 @@ packet_size: 128
 pattern: rapid-rise
 phases:
 - bandwidth: 50M
-  duration: 10
+  duration: 36
 - bandwidth: 500M
-  duration: 60
+  duration: 224

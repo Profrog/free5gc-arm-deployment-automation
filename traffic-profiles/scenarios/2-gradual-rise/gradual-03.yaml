@@ -4,12 +4,12 @@ packet_size: 1400
 pattern: gradual-rise
 phases:
 - bandwidth: 100M
-  duration: 20
+  duration: 73
 - bandwidth: 200M
-  duration: 20
+  duration: 73
 - bandwidth: 300M
-  duration: 20
+  duration: 73
 - bandwidth: 400M
-  duration: 20
+  duration: 73
 - bandwidth: 500M
-  duration: 20
+  duration: 74

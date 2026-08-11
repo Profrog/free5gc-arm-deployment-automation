@@ -415,6 +415,8 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ## [14] ipvlan/macvlan 동일 위상 — 네트워크 인터페이스 드라이버 관계
 
+참조: [IPVLAN — The Beginning (Bandewar 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf), [Linux Kernel: macvlan](https://www.kernel.org/doc/html/latest/networking/macvlan.html)
+
 ### 기술적 위치
 
 ```
@@ -447,6 +449,8 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 ---
 
 ## [15] 실험 설계 — 트래픽 시나리오 × CNI 전략 매트릭스
+
+참조: [IETF draft-samizadeh-bmwg-cni-benchmarking-02](https://datatracker.ietf.org/doc/draft-samizadeh-bmwg-cni-benchmarking/), [3GPP TS 22.261](https://www.3gpp.org/DynaReport/22261.htm), [3GPP TR 38.913](https://www.3gpp.org/DynaReport/38913.htm)
 
 ### 트래픽 시나리오 (행)
 
@@ -510,6 +514,8 @@ T3 (전환):    C > A, C > B  (NWDAF만 두 구간 모두 최적 — 핵심 결�
 ---
 
 ## [16] NWDAF 데이터 수집 경로: OAM 방식 선택의 정당성
+
+참조: [3GPP TS 23.288](https://www.3gpp.org/DynaReport/23288.htm), [3GPP TS 29.564](https://www.3gpp.org/DynaReport/29564.htm), [Ardestani 2025 (Waterloo)](https://arxiv.org/abs/2505.06789), [free5GC NWDAF Blog](https://free5gc.org/blog/)
 
 > **예상 공격**: "왜 3GPP TS 23.288의 Nupf Event Exposure를 구현하지 않았는가?"
 

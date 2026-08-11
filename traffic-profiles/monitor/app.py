@@ -218,82 +218,86 @@ with tab_cpu:
 
 # ── Memory 탭 ──
 with tab_mem:
-    st.subheader("Pod별 Memory 사용량 (MiB)")
-
     if pods:
-        chart_data = {}
-        for pod_name, data in pods.items():
-            resources = data["resources"]
-            if resources:
-                mems = [r["mem_mi"] for r in resources]
-                label = f"[{selected_run[:15]}] {pod_name[:20]}"
-                chart_data[label] = mems
+        import pandas as pd
 
-        # Run 2 오버레이
+        pod_list = list(pods.keys())
+        upf_default = next((i for i, p in enumerate(pod_list) if "upf" in p.lower() and "upf2" not in p.lower()), 0)
+        col_title, col_select = st.columns([1, 2])
+        with col_title:
+            st.subheader("Memory 사용량 (MiB)")
+        with col_select:
+            selected_mem_pod = st.selectbox("Pod", pod_list, index=upf_default, key="mem_pod")
+
+        chart_data = {}
+        if pods[selected_mem_pod]["resources"]:
+            mems = [r["mem_mi"] for r in pods[selected_mem_pod]["resources"]]
+            chart_data[f"[{selected_run[:15]}] {selected_mem_pod[:20]}"] = mems
+
         if selected_run2:
             _, _, _, pods2 = load_run_data(selected_run2)
+            nf_type = selected_mem_pod.split("-")[0:2]
             for pod_name, data in pods2.items():
-                resources = data["resources"]
-                if resources:
-                    mems = [r["mem_mi"] for r in resources]
-                    label = f"[{selected_run2[:15]}] {pod_name[:20]}"
-                    chart_data[label] = mems
-                mems = [r["mem_mi"] for r in resources]
-                chart_data[pod_name[:25]] = mems
+                if pod_name.split("-")[0:2] == nf_type and data["resources"]:
+                    mems = [r["mem_mi"] for r in data["resources"]]
+                    chart_data[f"[{selected_run2[:15]}] {pod_name[:20]}"] = mems
+                    break
 
         if chart_data:
             max_len = max(len(v) for v in chart_data.values())
             for k in chart_data:
                 chart_data[k] = chart_data[k] + [None] * (max_len - len(chart_data[k]))
-
             df = pd.DataFrame(chart_data)
             st.line_chart(df, height=400)
 
+            for label, vals in chart_data.items():
+                valid = [v for v in vals if v is not None]
+                if valid:
+                    st.caption(f"{label} — Mean: {sum(valid)/len(valid):.1f}Mi | Max: {max(valid)}Mi | Samples: {len(valid)}")
+
 # ── Packet Loss 탭 ──
 with tab_loss:
-    st.subheader("UPF Packet Loss")
+    if pods:
+        import pandas as pd
 
-    import pandas as pd
-    loss_chart = {}
+        # UPF Pod만 필터
+        upf_pods_list = [p for p in pods.keys() if "upf" in p.lower()]
+        if upf_pods_list:
+            col_title, col_select = st.columns([1, 2])
+            with col_title:
+                st.subheader("Packet Loss (%)")
+            with col_select:
+                selected_loss_pod = st.selectbox("UPF Pod", upf_pods_list, index=0, key="loss_pod")
 
-    upf_pods = {k: v for k, v in pods.items() if "upf" in k.lower()}
-    if upf_pods:
-        for pod_name, data in upf_pods.items():
-            pl = data["packet_loss"]
-            if pl:
-                losses = [r.get("loss_pct", 0) for r in pl]
-                loss_chart[f"[{selected_run[:15]}] {pod_name[:20]}"] = losses
+            loss_chart = {}
+            if pods[selected_loss_pod]["packet_loss"]:
+                losses = [r.get("loss_pct", 0) for r in pods[selected_loss_pod]["packet_loss"]]
+                loss_chart[f"[{selected_run[:15]}] {selected_loss_pod[:20]}"] = losses
 
-    # Run 2 오버레이
-    if selected_run2:
-        _, _, _, pods2 = load_run_data(selected_run2)
-        upf_pods2 = {k: v for k, v in pods2.items() if "upf" in k.lower()}
-        for pod_name, data in upf_pods2.items():
-            pl = data["packet_loss"]
-            if pl:
-                losses = [r.get("loss_pct", 0) for r in pl]
-                loss_chart[f"[{selected_run2[:15]}] {pod_name[:20]}"] = losses
+            if selected_run2:
+                _, _, _, pods2 = load_run_data(selected_run2)
+                nf_type = selected_loss_pod.split("-")[0:2]
+                for pod_name, data in pods2.items():
+                    if pod_name.split("-")[0:2] == nf_type and data["packet_loss"]:
+                        losses = [r.get("loss_pct", 0) for r in data["packet_loss"]]
+                        loss_chart[f"[{selected_run2[:15]}] {pod_name[:20]}"] = losses
+                        break
 
-    if loss_chart:
-        max_len = max(len(v) for v in loss_chart.values())
-        for k in loss_chart:
-            loss_chart[k] = loss_chart[k] + [None] * (max_len - len(loss_chart[k]))
-        df = pd.DataFrame(loss_chart)
-        st.line_chart(df, height=400)
+            if loss_chart:
+                max_len = max(len(v) for v in loss_chart.values())
+                for k in loss_chart:
+                    loss_chart[k] = loss_chart[k] + [None] * (max_len - len(loss_chart[k]))
+                df = pd.DataFrame(loss_chart)
+                st.line_chart(df, height=400)
 
-        # 요약 메트릭
-        for label, losses in loss_chart.items():
-            valid = [l for l in losses if l is not None]
-            if valid:
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric(f"{label} Mean", f"{sum(valid)/len(valid):.4f}%")
-                with col2:
-                    st.metric(f"Max", f"{max(valid):.4f}%")
-                with col3:
-                    st.metric(f"Samples", len(valid))
-    else:
-        st.info("UPF packet loss 데이터 없음")
+                for label, vals in loss_chart.items():
+                    valid = [v for v in vals if v is not None]
+                    if valid:
+                        st.caption(f"{label} — Mean: {sum(valid)/len(valid):.4f}% | Max: {max(valid):.4f}% | Samples: {len(valid)}")
+            else:
+                st.info("선택한 UPF의 packet loss 데이터 없음")
+        else:
+            st.info("UPF Pod 없음")
 
 # ── Anomaly 탭 ──
 with tab_anomaly:

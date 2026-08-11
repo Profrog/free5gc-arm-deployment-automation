@@ -282,7 +282,7 @@ run_experiment() {
     echo "═══════════════════════════════════════"
     echo ""
 
-    local nwdaf_switch="${SCRIPT_DIR}/../arm_k8s/dranet/nwdaf-switch.sh"
+    local nwdaf_switch="${SCRIPT_DIR}/../arm_k8s/nwdaf/nwdaf-switch.sh"
 
     for rep in $(seq 1 "$rep_count"); do
         log "━━━ Repetition $rep/$rep_count ━━━"

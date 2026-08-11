@@ -46,7 +46,7 @@ free5gc-k8s-arm/
 │   ├── build.sh             #   NF 바이너리 빌드
 │   ├── docker-build.sh      #   Docker 이미지 (NWDAF 포함)
 │   └── deploy.sh            #   K8s 배포
-├── free5gc_source/          # NF별 소스 코드
+├── free5gc_source/          # NF별 소스 코드 (gtp5g 포함)
 ├── free5gc_build/           # 빌드된 바이너리
 ├── arm_docker/              # Docker image sources
 ├── arm_k8s/                 # Kubernetes manifests
@@ -54,10 +54,10 @@ free5gc-k8s-arm/
 │   ├── networks5g/          #   Multus NAD (ipvlan + macvlan dual-attach)
 │   ├── free5gc/             #   Core NF deployments
 │   ├── free5gc-webui/
+│   ├── free5gc-metrics/     #   메트릭 수집 설정
 │   ├── ueransim/            #   gNB + UE
 │   ├── subscriber/
-│   ├── dranet/              #   전환 스크립트 (nwdaf-switch.sh)
-│   └── nwdaf/               #   ★ NWDAF NF (ML 엔진, 모델, Dockerfile, K8s manifests)
+│   └── nwdaf/               #   ★ NWDAF NF (ML 엔진, 모델, 전환 스크립트, K8s manifests)
 ├── traffic-profiles/        # ★ 트래픽 생성 + 실험 프레임워크
 │   ├── profiles/            #   트래픽 프로파일 (APN, 시나리오)
 │   ├── experiments/         #   실험 매트릭스 정의 (9개 YAML)
@@ -107,11 +107,11 @@ done
 ### 4. CNI 전환 제어
 
 ```bash
-./arm_k8s/dranet/nwdaf-switch.sh on       # NWDAF 자동 전환 활성화
-./arm_k8s/dranet/nwdaf-switch.sh off      # NWDAF 비활성화
-./arm_k8s/dranet/nwdaf-switch.sh ipvlan   # CNI 수동 전환 (ip addr 이동)
-./arm_k8s/dranet/nwdaf-switch.sh macvlan  # CNI 수동 전환 (ip addr 이동)
-./arm_k8s/dranet/nwdaf-switch.sh status   # 현재 상태 확인
+./arm_k8s/nwdaf/nwdaf-switch.sh on       # NWDAF 자동 전환 활성화
+./arm_k8s/nwdaf/nwdaf-switch.sh off      # NWDAF 비활성화
+./arm_k8s/nwdaf/nwdaf-switch.sh ipvlan   # CNI 수동 전환 (ip addr 이동)
+./arm_k8s/nwdaf/nwdaf-switch.sh macvlan  # CNI 수동 전환 (ip addr 이동)
+./arm_k8s/nwdaf/nwdaf-switch.sh status   # 현재 상태 확인
 ```
 
 ## Experiment Matrix
@@ -155,7 +155,7 @@ Multus + ipvlan/macvlan → 5G data plane interfaces
 | AnLF (추론) | ✅ | `arm_k8s/nwdaf/src/nwdaf-engine.py` |
 | MTLF (학습) | ✅ | `arm_k8s/nwdaf/src/train-model.py` |
 | ML Model | RandomForest (5 features) | `arm_k8s/nwdaf/src/model/nwdaf-classifier.pkl` |
-| 전환 실행 | `ip -batch` (커널 IP 이동) | `arm_k8s/dranet/nwdaf-switch.sh` |
+| 전환 실행 | `ip -batch` (커널 IP 이동) | `arm_k8s/nwdaf/nwdaf-switch.sh` |
 | 데이터 수집 | OAM 경로 | kubectl top + /proc/net/dev |
 
 ### ML Features

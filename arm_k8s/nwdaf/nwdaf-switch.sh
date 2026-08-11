@@ -1,138 +1,169 @@
 #!/bin/bash
-# nwdaf-switch.sh — NWDAF AI 결정을 DRANET ResourceClaim으로 실행
+# nwdaf-switch.sh — 무중단 CNI 백엔드 전환 (IP 이동 방식)
 #
-# NWDAF가 "macvlan로 바꿔라" 또는 "ipvlan로 바꿔라" 결정을 내리면
-# 이 스크립트가 ResourceClaim의 deviceClassName을 변경하여 전환 실행.
+# UPF Pod에 macvlan(n3/n4)과 ipvlan(n3i/n4i)이 동시에 attach되어 있으며,
+# IP 주소를 인터페이스 간 이동하여 Pod/프로세스 재시작 없이 전환한다.
 #
 # 사용법:
 #   ./nwdaf-switch.sh macvlan     # ipvlan → macvlan 전환
 #   ./nwdaf-switch.sh ipvlan      # macvlan → ipvlan 전환
 #   ./nwdaf-switch.sh status      # 현재 상태 확인
 #
-# 실제 NWDAF 연동 시에는 이 스크립트를 NWDAF의 decision output hook으로 호출.
+# 환경변수:
+#   NAMESPACE    — K8s namespace (default: free5gc)
+#   N3_IP        — N3 인터페이스 IP (default: 10.10.3.1/24)
+#   N4_IP        — N4 인터페이스 IP (default: 10.10.4.1/24)
 
 set -euo pipefail
 
 NAMESPACE="${NAMESPACE:-free5gc}"
-CLAIM_NAME="${CLAIM_NAME:-upf-network}"
-MONITOR_LOG="${MONITOR_LOG:-}"  # 모니터링 이벤트 마커 파일
+N3_IP="${N3_IP:-10.10.3.1/24}"
+N4_IP="${N4_IP:-10.10.4.1/24}"
 
-log() { echo "[$(date '+%H:%M:%S')] [NWDAF-SWITCH] $1"; }
+# 인터페이스 매핑
+MACVLAN_N3="n3"
+MACVLAN_N4="n4"
+IPVLAN_N3="n3i"
+IPVLAN_N4="n4i"
+
+log() { echo "[$(date '+%H:%M:%S.%3N')] [NWDAF-SWITCH] $1"; }
 
 # ═══════════════════════════════════════════════════════
-# 현재 상태 확인
+# UPF Pod 찾기
+# ═══════════════════════════════════════════════════════
+get_upf_pod() {
+    kubectl -n "$NAMESPACE" get pods -l nf=upf,name=upf \
+        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null
+}
+
+# ═══════════════════════════════════════════════════════
+# 현재 상태 확인 — IP가 어느 인터페이스에 있는지
 # ═══════════════════════════════════════════════════════
 get_current_backend() {
-    kubectl get resourceclaim "$CLAIM_NAME" -n "$NAMESPACE" \
-        -o jsonpath='{.spec.devices.requests[0].deviceClassName}' 2>/dev/null
+    local pod
+    pod=$(get_upf_pod)
+    if [[ -z "$pod" ]]; then
+        echo "unknown"
+        return
+    fi
+
+    local n3_has_ip
+    n3_has_ip=$(kubectl -n "$NAMESPACE" exec "$pod" -- \
+        ip addr show dev "$MACVLAN_N3" 2>/dev/null | grep -c "${N3_IP%%/*}" || true)
+
+    if [[ "$n3_has_ip" -gt 0 ]]; then
+        echo "macvlan"
+    else
+        echo "ipvlan"
+    fi
 }
 
 show_status() {
-    local current
+    local current pod
     current=$(get_current_backend)
+    pod=$(get_upf_pod)
     echo ""
     echo "═══════════════════════════════════════"
     echo "  UPF Network Backend Status"
     echo "═══════════════════════════════════════"
-    echo "  Claim:    $CLAIM_NAME"
+    echo "  Pod:      $pod"
     echo "  Current:  $current"
-    echo "  Options:  net-ipvlan (low overhead)"
-    echo "            net-macvlan (high performance)"
+    echo "  N3 IP:    $N3_IP"
+    echo "  N4 IP:    $N4_IP"
+    echo ""
+    echo "  Interfaces:"
+    echo "    macvlan: $MACVLAN_N3 / $MACVLAN_N4 (on n3br/n4br)"
+    echo "    ipvlan:  $IPVLAN_N3 / $IPVLAN_N4 (on n3br-ipv/n4br-ipv)"
     echo "═══════════════════════════════════════"
     echo ""
 }
 
 # ═══════════════════════════════════════════════════════
-# 전환 실행
+# 전환 실행 — IP 이동 (밀리초 단위, 무중단)
 # ═══════════════════════════════════════════════════════
 switch_backend() {
     local target="$1"
-    local device_class="net-${target}"
-    local current
-    current=$(get_current_backend)
+    local pod current
 
-    if [[ "$current" == "$device_class" ]]; then
-        log "Already using $device_class. No change needed."
+    pod=$(get_upf_pod)
+    if [[ -z "$pod" ]]; then
+        log "ERROR: UPF pod not found"
+        exit 1
+    fi
+
+    current=$(get_current_backend)
+    if [[ "$current" == "$target" ]]; then
+        log "Already on $target, no switch needed"
         return 0
     fi
 
-    log "Switching: $current → $device_class"
-    local switch_time
-    switch_time=$(date -Iseconds)
+    log "Switching: $current → $target"
+    log "Pod: $pod"
 
-    # ResourceClaim 패치
-    kubectl patch resourceclaim "$CLAIM_NAME" -n "$NAMESPACE" --type='json' \
-        -p="[
-            {\"op\": \"replace\", \"path\": \"/spec/devices/requests/0/deviceClassName\", \"value\": \"$device_class\"},
-            {\"op\": \"replace\", \"path\": \"/spec/devices/requests/1/deviceClassName\", \"value\": \"$device_class\"}
-        ]"
+    local start_time end_time elapsed
+    start_time=$(date +%s%N)
 
-    log "ResourceClaim patched. Waiting for DRANET to reconcile..."
+    if [[ "$target" == "ipvlan" ]]; then
+        # macvlan → ipvlan: IP를 n3/n4에서 n3i/n4i로 이동 (atomic batch)
+        kubectl -n "$NAMESPACE" exec "$pod" -- sh -c "
+            ip -batch - <<EOF
+addr del $N3_IP dev $MACVLAN_N3
+addr add $N3_IP dev $IPVLAN_N3
+addr del $N4_IP dev $MACVLAN_N4
+addr add $N4_IP dev $IPVLAN_N4
+EOF
+        " 2>/dev/null
 
-    # DRANET이 실제 전환을 수행할 때까지 대기
-    sleep 5
+    elif [[ "$target" == "macvlan" ]]; then
+        # ipvlan → macvlan: IP를 n3i/n4i에서 n3/n4로 이동 (atomic batch)
+        kubectl -n "$NAMESPACE" exec "$pod" -- sh -c "
+            ip -batch - <<EOF
+addr del $N3_IP dev $IPVLAN_N3
+addr add $N3_IP dev $MACVLAN_N3
+addr del $N4_IP dev $IPVLAN_N4
+addr add $N4_IP dev $MACVLAN_N4
+EOF
+        " 2>/dev/null
 
-    # 전환 확인
-    local new_backend
-    new_backend=$(get_current_backend)
-    if [[ "$new_backend" == "$device_class" ]]; then
-        log "✓ Switch complete: $current → $new_backend"
     else
-        log "✗ Switch may have failed. Current: $new_backend"
+        log "ERROR: Unknown target '$target'. Use 'macvlan' or 'ipvlan'."
+        exit 1
     fi
 
-    # 모니터링 이벤트 마커 기록
-    if [[ -n "$MONITOR_LOG" ]]; then
-        printf '{"ts":"%s","event":"cni_switch","from":"%s","to":"%s"}\n' \
-            "$switch_time" "$current" "$device_class" >> "$MONITOR_LOG"
-        log "Event marker written to: $MONITOR_LOG"
+    end_time=$(date +%s%N)
+    elapsed=$(( (end_time - start_time) / 1000000 ))
+
+    log "Switch complete: $current → $target (${elapsed}ms)"
+
+    # 검증
+    local verify
+    verify=$(get_current_backend)
+    if [[ "$verify" == "$target" ]]; then
+        log "Verified: now on $target ✓"
+    else
+        log "WARNING: verification failed, expected=$target actual=$verify"
+        exit 1
     fi
 
-    # 기본 monitor-data 에도 기록 (최신 run)
-    local latest_run
-    latest_run=$(ls -td /home/ubuntu/free5gc-k8s-arm/traffic-profiles/monitor-data/run_* 2>/dev/null | head -1)
-    if [[ -n "$latest_run" ]]; then
-        printf '{"ts":"%s","event":"cni_switch","from":"%s","to":"%s"}\n' \
-            "$switch_time" "$current" "$device_class" >> "${latest_run}/events.jsonl"
-    fi
+    return 0
 }
 
 # ═══════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════
-main() {
-    case "${1:-}" in
-        macvlan|ipvlan)
-            switch_backend "$1"
-            ;;
-        status)
-            show_status
-            ;;
-        on)
-            log "Enabling NWDAF Pod (scale replicas=1)"
-            kubectl scale deployment/nwdaf -n "$NAMESPACE" --replicas=1
-            kubectl wait --for=condition=ready pod -l nf=nwdaf -n "$NAMESPACE" --timeout=60s 2>/dev/null && \
-                log "✓ NWDAF is ON" || log "⚠ NWDAF pod not ready yet"
-            ;;
-        off)
-            log "Disabling NWDAF Pod (scale replicas=0)"
-            kubectl scale deployment/nwdaf -n "$NAMESPACE" --replicas=0
-            log "✓ NWDAF is OFF"
-            ;;
-        *)
-            echo "Usage: $0 <macvlan|ipvlan|status|on|off>"
-            echo ""
-            echo "CNI Control:"
-            echo "  $0 macvlan    # Switch to high-performance macvlan"
-            echo "  $0 ipvlan     # Switch to low-overhead ipvlan"
-            echo "  $0 status     # Show current backend"
-            echo ""
-            echo "NWDAF Control:"
-            echo "  $0 on         # Enable NWDAF (scale replicas=1)"
-            echo "  $0 off        # Disable NWDAF (scale replicas=0)"
-            exit 1
-            ;;
-    esac
-}
-
-main "$@"
+case "${1:-status}" in
+    macvlan|ipvlan)
+        switch_backend "$1"
+        ;;
+    status)
+        show_status
+        ;;
+    *)
+        echo "Usage: $0 {macvlan|ipvlan|status}"
+        echo ""
+        echo "  macvlan  — Switch to macvlan (high throughput, large packets)"
+        echo "  ipvlan   — Switch to ipvlan (low overhead, high PPS)"
+        echo "  status   — Show current backend"
+        exit 1
+        ;;
+esac

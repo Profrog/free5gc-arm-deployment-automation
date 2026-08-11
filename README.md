@@ -168,16 +168,6 @@ Multus + ipvlan/macvlan → 5G data plane interfaces
 | cpu_milli | UPF CPU 사용량 |
 | mem_mi | UPF 메모리 사용량 |
 
-## CPU Isolation (Experiment)
-
-```
-CPU 0, 1  →  UPF 전용 (Guaranteed QoS, CPU Manager static)
-CPU 2     →  traffic-gen 전용
-CPU 3     →  나머지 (NFs, NWDAF, monitor, kubelet)
-```
-
-IETF BMWG "consistent CPU pinning" 조건 충족. 격리 유효성은 per-CPU 시계열 + steal time < 1%로 검증.
-
 ## Key Design Decisions
 
 | 결정 | 이유 |
@@ -188,9 +178,32 @@ IETF BMWG "consistent CPU pinning" 조건 충족. 격리 유효성은 per-CPU �
 | Random Forest | ARM64 추론 <1ms, feature importance 해석 가능, 학계 선례 |
 | ARM64 플랫폼 | 커널 경로 차이에 따른 KPI 변화가 x86보다 크게 관측됨 → 실험 민감도 향상 |
 
+## Infrastructure Spec
+
+| 항목 | 스펙 |
+|------|------|
+| Cloud | Oracle Cloud Infrastructure (OCI) |
+| Region | ap-chuncheon-1 (춘천) |
+| Instance | VM.Standard.A1.Flex |
+| CPU | ARM Neoverse-N1, 4 vCPU |
+| Memory | 24 GB |
+| OS | Ubuntu 22.04.5 LTS |
+| Kernel | 6.8.0-1058-oracle (aarch64) |
+| NIC | enp0s6 (virtio-net) |
+
+### CPU 할당
+
+```
+CPU 0, 1  →  UPF 전용 (K8s CPU Manager static policy)
+CPU 2     →  traffic-gen (iperf3)
+CPU 3     →  시스템 (NFs, NWDAF, monitor, kubelet)
+```
+
+단일 노드 4코어 환경에서 격리 실험 수행. IETF BMWG "consistent CPU pinning" 준수.
+
 ## Prerequisites
 
-- ARM64 Linux (tested: Ubuntu 22.04 on AWS Graviton)
+- ARM64 Linux (tested: Ubuntu 22.04 on OCI A1.Flex)
 - Kubernetes v1.28+ (kubeadm)
 - Multus CNI
 - containerd

@@ -413,6 +413,10 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ---
 
+# 본 연구의 설계 결정
+
+---
+
 ## [14] ipvlan/macvlan 동일 위상 — 네트워크 인터페이스 드라이버 관계
 
 참조: [IPVLAN — The Beginning (Bandewar 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf), [Linux Kernel: macvlan](https://www.kernel.org/doc/html/latest/networking/macvlan.html)

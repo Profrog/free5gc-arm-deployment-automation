@@ -1,5 +1,7 @@
 # References — UPF Data Plane Benchmarking
 
+본 문서는 연구 제안서, 선행연구 레퍼런스(A), 본 연구의 설계 결정(B)으로 구성됩니다.
+
 트래픽 프로파일 설계 시 참고한 논문 및 벤치마크 자료.
 
 > **⚠️ 설계 변경 사항 (2026-08-09)**
@@ -12,7 +14,7 @@
 
 ---
 
-## [1] 연구 제안서 — 논문 구조 및 실험 프로세스 요약
+## 연구 제안서 — 논문 구조 및 실험 프로세스 요약
 
 ### Title
 
@@ -166,7 +168,11 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [2] Kernel-Level Per-Slice UPF Latency Measurement in Containerised 5G Core Networks
+# A. 선행연구 레퍼런스
+
+---
+
+## [A1] Kernel-Level Per-Slice UPF Latency Measurement in Containerised 5G Core Networks
 
 - **저자**: Akhil Dev Mishra, Mayank Pandey
 - **출처**: arXiv:2605.28185, May 2026
@@ -184,7 +190,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [3] Simple Measurement of UPF Performance
+## [A2] Simple Measurement of UPF Performance
 
 - **저자**: s5uishida
 - **출처**: GitHub Repository, Dec 2023
@@ -214,7 +220,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [4] 5G UPF Performance on Intel Xeon (Reference — Commercial Scale)
+## [A3] 5G UPF Performance on Intel Xeon (Reference — Commercial Scale)
 
 - **출처**: Intel Network Builders, 2024
 - **URL**: https://builders.intel.com/docs/networkbuilders/5g-flexcore-2-0-user-plane-function...
@@ -228,7 +234,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [5] 3GPP TS 23.288 — Network Data Analytics Services (NWDAF)
+## [A4] 3GPP TS 23.288 — Network Data Analytics Services (NWDAF)
 
 - **출처**: 3GPP, Release 17/18
 - **URL**: https://www.3gpp.org/DynaReport/23288.htm
@@ -245,7 +251,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [6] 3GPP TS 23.501 — System Architecture for the 5G System (5GS)
+## [A5] 3GPP TS 23.501 — System Architecture for the 5G System (5GS)
 
 - **출처**: 3GPP, Release 17
 - **URL**: https://www.3gpp.org/DynaReport/23501.htm
@@ -258,7 +264,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [7] 3GPP TS 29.244 — Interface between the Control Plane and the User Plane (PFCP)
+## [A6] 3GPP TS 29.244 — Interface between the Control Plane and the User Plane (PFCP)
 
 - **출처**: 3GPP, Release 17
 - **URL**: https://www.3gpp.org/DynaReport/29244.htm
@@ -269,7 +275,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [8] DRANET: A Composable Architecture for High-Performance Networking in Kubernetes
+## [A7] DRANET: A Composable Architecture for High-Performance Networking in Kubernetes
 
 - **저자**: Antonio Ojea et al. (kubernetes-sigs)
 - **출처**: arXiv:2506.23628, Jun 2025
@@ -293,7 +299,7 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ---
 
-## [10] NWDAF 관련 유사 연구 비교
+## [A8] NWDAF 관련 유사 연구 비교
 
 | 연구 | NWDAF 구현 | ML 모델 | 대상 NF | 실행(Action) | closed-loop | 본 연구와의 차이 |
 |------|-----------|---------|---------|-------------|-------------|-----------------|
@@ -334,7 +340,7 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ---
 
-## [11] CNI 타입별 성능 차이 근거 — 전환 판단의 유효성 뒷받침
+## [A9] CNI 타입별 성능 차이 근거 — 전환 판단의 유효성 뒷받침
 
 > **핵심 질문**: "CNI를 바꾸면 KPI가 실제로 변하는가?" + "전후 비교로 판단을 평가하는 게 유효한가?"
 
@@ -372,7 +378,7 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ---
 
-## [12] 트래픽 프로파일 ↔ CNI 적합성 매핑 근거
+## [A10] 트래픽 프로파일 ↔ CNI 적합성 매핑 근거
 
 > NWDAF가 "ipvlan / macvlan 중 어느 것이 정답인가"를 판단할 때의 ground truth 정의.
 
@@ -413,11 +419,11 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ---
 
-# 본 연구의 설계 결정
+# B. 본 연구의 설계 결정
 
 ---
 
-## [14] ipvlan/macvlan 동일 위상 — 네트워크 인터페이스 드라이버 관계
+## [B1] ipvlan/macvlan 동일 위상 — 네트워크 인터페이스 드라이버 관계
 
 참조: [IPVLAN — The Beginning (Bandewar 2015)](http://people.netfilter.org/pablo/netdev0.1/papers/IPVLAN-The-beginning.pdf), [Linux Kernel: macvlan](https://www.kernel.org/doc/html/latest/networking/macvlan.html)
 
@@ -452,7 +458,7 @@ AnLF와 MTLF는 독립 배치 가능한 논리 기능으로 분리되어 있으�
 
 ---
 
-## [15] 실험 설계 — 트래픽 시나리오 × CNI 전략 매트릭스
+## [B2] 실험 설계 — 트래픽 시나리오 × CNI 전략 매트릭스
 
 참조: [IETF draft-samizadeh-bmwg-cni-benchmarking-02](https://datatracker.ietf.org/doc/draft-samizadeh-bmwg-cni-benchmarking/), [3GPP TS 22.261](https://www.3gpp.org/DynaReport/22261.htm), [3GPP TR 38.913](https://www.3gpp.org/DynaReport/38913.htm)
 
@@ -517,7 +523,7 @@ T3 (전환):    C > A, C > B  (NWDAF만 두 구간 모두 최적 — 핵심 결�
 
 ---
 
-## [16] NWDAF 데이터 수집 경로: OAM 방식 선택의 정당성
+## [B3] NWDAF 데이터 수집 경로: OAM 방식 선택의 정당성
 
 참조: [3GPP TS 23.288](https://www.3gpp.org/DynaReport/23288.htm), [3GPP TS 29.564](https://www.3gpp.org/DynaReport/29564.htm), [Ardestani 2025 (Waterloo)](https://arxiv.org/abs/2505.06789), [free5GC NWDAF Blog](https://free5gc.org/blog/)
 
@@ -593,7 +599,7 @@ free5GC Blog (2024.11):
 
 ---
 
-## [17] ML 모델 선택 근거 — Random Forest
+## [B4] ML 모델 선택 근거 — Random Forest
 
 참조: [3GPP TS 23.288](https://www.3gpp.org/DynaReport/23288.htm), [Bayleyegn 2024 (NetSoft)](https://ieeexplore.ieee.org/document/10582517), [Ardestani 2025](https://arxiv.org/abs/2505.06789), [Breiman 2001 — Random Forests](https://link.springer.com/article/10.1023/A:1010933404324), [scikit-learn RandomForestClassifier](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
 
@@ -659,7 +665,7 @@ Feature Importance (학습 결과):
 
 ---
 
-## [18] 실험 격리 — CPU Pinning 및 검증
+## [B5] 실험 격리 — CPU Pinning 및 검증
 
 참조: [Kubernetes CPU Manager](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/), [IETF draft-samizadeh-bmwg-cni-benchmarking-02 §7.3](https://datatracker.ietf.org/doc/draft-samizadeh-bmwg-cni-benchmarking/)
 
@@ -733,7 +739,7 @@ reservedSystemCPUs: "3"
 
 ---
 
-## [19] ML 학습 전략 — Predictive 모델을 위한 시계열 패턴 기반 학습
+## [B6] ML 학습 전략 — Predictive 모델을 위한 시계열 패턴 기반 학습
 
 참조: [scikit-learn Pipeline](https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html), [3GPP TS 23.288 — Analytics Accuracy](https://www.3gpp.org/DynaReport/23288.htm)
 
@@ -828,7 +834,7 @@ ML:
 
 ---
 
-## [20] 전환 비용(Switching Cost) 분석 프레임워크
+## [B7] 전환 비용(Switching Cost) 분석 프레임워크
 
 ### 문제: 전환이 무중단이 아닐 수 있음
 
@@ -894,7 +900,7 @@ else:
 
 ---
 
-## [21] 실험 측정 범위 (Measurement Scope Limitation)
+## [B8] 실험 측정 범위 (Measurement Scope Limitation)
 
 ### 현재 테스트베드 구성
 
@@ -944,7 +950,7 @@ UE (client) → gNB → UPF → N6 → DN Server (iperf3 server)
 
 ---
 
-## [22] ARM vs x86 아키텍처 차이와 네트워크 성능 영향
+## [B9] ARM vs x86 아키텍처 차이와 네트워크 성능 영향
 
 ### 네트워크 인터페이스별 성능 차이가 ARM에서 더 크게 나타나는 이유
 
@@ -1022,7 +1028,7 @@ ARM에서는 명령어당 시간이 길어서 경로 차이가 throughput에 더
 
 ---
 
-## [23] 무중단 인터페이스 전환 메커니즘 (Zero-Downtime CNI Backend Switching)
+## [B10] 무중단 인터페이스 전환 메커니즘 (Zero-Downtime CNI Backend Switching)
 
 ### 핵심 원리
 
@@ -1132,7 +1138,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## [24] ML Feature 설계 근거 (NWDAF 입력 KPI 선정)
+## [B11] ML Feature 설계 근거 (NWDAF 입력 KPI 선정)
 
 ### 선정된 Feature (5개)
 
@@ -1176,7 +1182,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## [25] 표준 준수 범위와 확장 경계 (Standard Compliance Boundary)
+## [B12] 표준 준수 범위와 확장 경계 (Standard Compliance Boundary)
 
 ### 문제: "NWDAF가 CNI를 전환하는 게 3GPP 표준인가?"
 
@@ -1308,7 +1314,7 @@ n3br (OVS bridge)              n3br-ipv (Linux bridge)
 
 ---
 
-## [26] NWDAF 표준 전환 대상 vs 본 연구 전환 대상 (Switching Target Comparison)
+## [B13] NWDAF 표준 전환 대상 vs 본 연구 전환 대상 (Switching Target Comparison)
 
 ### 핵심 질문
 
@@ -1441,7 +1447,7 @@ Intra-UPF 최적화 (본 연구):
 
 ---
 
-## [27] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
+## [B14] Inter-UPF 선택에서 Intra-UPF 최적화로의 확장 근거 (Bridging References)
 
 ### 핵심 논리
 
@@ -1592,7 +1598,7 @@ Step 4: 그런데 이 전환을 트래픽 특성에 따라 자동으로 판단�
 
 ---
 
-## [28] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
+## [B15] 네트워크 인터페이스 계층 구조 — enp0s6과 커널의 관계
 
 ### 계층 구조
 

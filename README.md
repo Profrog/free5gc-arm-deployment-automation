@@ -1,3 +1,5 @@
+<img width="2155" height="1024" alt="image" src="https://github.com/user-attachments/assets/ab4aeafb-e276-4cb7-9b5e-3953e22a8bbc" />
+
 # free5gc-k8s-arm
 
 ARM64 환경에서 free5GC 5G 코어 네트워크를 소스 레벨부터 수정하고, 빌드 → Docker 이미지 → K8s 배포까지 한 번에 돌려서 바로 동작을 확인할 수 있는 개발/테스트 환경입니다.

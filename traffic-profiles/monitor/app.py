@@ -117,6 +117,198 @@ st.caption("APN Profile 기반 트래픽 테스트 모니터링")
 
 # 사이드바: Run 선택
 with st.sidebar:
+    st.header("📂 모드 선택")
+    page_mode = st.radio("", ["📡 UPF Monitor", "⚖️ Fair CNI 비교"], label_visibility="collapsed")
+    st.divider()
+
+# ═══════════════════════════════════════════════════════
+# Fair CNI 비교 모드
+# ═══════════════════════════════════════════════════════
+if page_mode == "⚖️ Fair CNI 비교":
+    st.title("⚖️ 공정 조건 CNI 비교: ipvlan vs macvlan")
+    st.markdown("""
+    **실험 조건**: 물리 NIC(`enp1s0`) 직접 분기 — bridge/veth 없이 순수 드라이버 성능 비교  
+    **편향 제거**: 기존 dual-bridge 구조의 ipvlan 불이익(veth 추가 경유) 제거
+    """)
+
+    import plotly.graph_objects as go
+    import pandas as pd
+    from plotly.subplots import make_subplots
+
+    FAIR_DATA_DIR = Path("/home/ubuntu/free5gc-k8s-arm/traffic-profiles/monitor/data")
+
+    def load_iperf3_json(filepath):
+        try:
+            with open(filepath) as f:
+                data = json.load(f)
+            end = data.get("end", {})
+            sum_data = end.get("sum", {})
+            intervals = data.get("intervals", [])
+            interval_data = []
+            for iv in intervals:
+                s = iv.get("sum", {})
+                interval_data.append({
+                    "seconds": s.get("end", 0),
+                    "bits_per_second": s.get("bits_per_second", 0),
+                    "packets": s.get("packets", 0),
+                    "lost_packets": s.get("lost_packets", 0),
+                })
+            return {
+                "throughput_mbps": sum_data.get("bits_per_second", 0) / 1e6,
+                "packets": sum_data.get("packets", 0),
+                "lost_packets": sum_data.get("lost_packets", 0),
+                "lost_percent": sum_data.get("lost_percent", 0),
+                "jitter_ms": sum_data.get("jitter_ms", 0),
+                "intervals": interval_data,
+            }
+        except Exception as e:
+            return None
+
+    # 결과 파일 찾기
+    fair_files = {}
+    for pattern, key in [
+        ("fair-macvlan-udp64_*.json", "macvlan_64"),
+        ("fair-ipvlan-udp64_*.json", "ipvlan_64"),
+        ("fair-macvlan-udp1400_*.json", "macvlan_1400"),
+        ("fair-ipvlan-udp1400_*.json", "ipvlan_1400"),
+    ]:
+        files = sorted(FAIR_DATA_DIR.glob(pattern))
+        valid = [f for f in files if f.stat().st_size > 1000]
+        if valid:
+            fair_files[key] = valid[-1]
+
+    if not fair_files:
+        st.warning("실험 결과 파일이 없습니다. `fair-test.sh`를 먼저 실행하세요.")
+        st.stop()
+
+    fair_data = {}
+    for key, filepath in fair_files.items():
+        fair_data[key] = load_iperf3_json(filepath)
+
+    # 종합 결과
+    st.header("📊 종합 결과")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("🔹 소패킷 (64B, UDP flood)")
+        if "macvlan_64" in fair_data and "ipvlan_64" in fair_data:
+            m = fair_data["macvlan_64"]
+            i = fair_data["ipvlan_64"]
+            if m and i:
+                df = pd.DataFrame({
+                    "지표": ["Throughput (Mbps)", "Packets", "Lost", "Loss (%)", "Jitter (ms)"],
+                    "macvlan": [f"{m['throughput_mbps']:.1f}", f"{m['packets']:,}", f"{m['lost_packets']:,}", f"{m['lost_percent']:.2f}", f"{m['jitter_ms']:.3f}"],
+                    "ipvlan": [f"{i['throughput_mbps']:.1f}", f"{i['packets']:,}", f"{i['lost_packets']:,}", f"{i['lost_percent']:.2f}", f"{i['jitter_ms']:.3f}"],
+                })
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                if i['lost_percent'] < m['lost_percent']:
+                    st.success(f"✅ 소패킷: **ipvlan 유리** (loss {i['lost_percent']:.2f}% < {m['lost_percent']:.2f}%)")
+                else:
+                    st.info(f"소패킷: macvlan 유리")
+
+    with col2:
+        st.subheader("🔸 대패킷 (1400B, 500Mbps)")
+        if "macvlan_1400" in fair_data and "ipvlan_1400" in fair_data:
+            m = fair_data["macvlan_1400"]
+            i = fair_data["ipvlan_1400"]
+            if m and i:
+                df = pd.DataFrame({
+                    "지표": ["Throughput (Mbps)", "Packets", "Lost", "Loss (%)", "Jitter (ms)"],
+                    "macvlan": [f"{m['throughput_mbps']:.1f}", f"{m['packets']:,}", f"{m['lost_packets']:,}", f"{m['lost_percent']:.2f}", f"{m['jitter_ms']:.3f}"],
+                    "ipvlan": [f"{i['throughput_mbps']:.1f}", f"{i['packets']:,}", f"{i['lost_packets']:,}", f"{i['lost_percent']:.2f}", f"{i['jitter_ms']:.3f}"],
+                })
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                if m['lost_percent'] < i['lost_percent']:
+                    st.success(f"✅ 대패킷: **macvlan 유리** (loss {m['lost_percent']:.2f}% < {i['lost_percent']:.2f}%)")
+                else:
+                    st.info(f"대패킷: ipvlan 유리")
+
+    # Bar charts
+    st.header("📈 비교 차트")
+    categories = []
+    macvlan_loss = []
+    ipvlan_loss = []
+    macvlan_tp = []
+    ipvlan_tp = []
+
+    if "macvlan_64" in fair_data and "ipvlan_64" in fair_data and fair_data["macvlan_64"] and fair_data["ipvlan_64"]:
+        categories.append("소패킷 (64B)")
+        macvlan_loss.append(fair_data["macvlan_64"]["lost_percent"])
+        ipvlan_loss.append(fair_data["ipvlan_64"]["lost_percent"])
+        macvlan_tp.append(fair_data["macvlan_64"]["throughput_mbps"])
+        ipvlan_tp.append(fair_data["ipvlan_64"]["throughput_mbps"])
+
+    if "macvlan_1400" in fair_data and "ipvlan_1400" in fair_data and fair_data["macvlan_1400"] and fair_data["ipvlan_1400"]:
+        categories.append("대패킷 (1400B)")
+        macvlan_loss.append(fair_data["macvlan_1400"]["lost_percent"])
+        ipvlan_loss.append(fair_data["ipvlan_1400"]["lost_percent"])
+        macvlan_tp.append(fair_data["macvlan_1400"]["throughput_mbps"])
+        ipvlan_tp.append(fair_data["ipvlan_1400"]["throughput_mbps"])
+
+    c1, c2 = st.columns(2)
+    with c1:
+        fig_loss = go.Figure()
+        fig_loss.add_trace(go.Bar(name="macvlan", x=categories, y=macvlan_loss, marker_color="#FF6B6B"))
+        fig_loss.add_trace(go.Bar(name="ipvlan", x=categories, y=ipvlan_loss, marker_color="#4ECDC4"))
+        fig_loss.update_layout(title="Packet Loss (낮을수록 좋음)", yaxis_title="Loss (%)", barmode="group", height=350)
+        st.plotly_chart(fig_loss, use_container_width=True)
+
+    with c2:
+        fig_tp = go.Figure()
+        fig_tp.add_trace(go.Bar(name="macvlan", x=categories, y=macvlan_tp, marker_color="#FF6B6B"))
+        fig_tp.add_trace(go.Bar(name="ipvlan", x=categories, y=ipvlan_tp, marker_color="#4ECDC4"))
+        fig_tp.update_layout(title="Throughput (높을수록 좋음)", yaxis_title="Mbps", barmode="group", height=350)
+        st.plotly_chart(fig_tp, use_container_width=True)
+
+    # 시계열
+    st.header("📉 시계열 (초별)")
+    tab1, tab2 = st.tabs(["소패킷 64B", "대패킷 1400B"])
+    with tab1:
+        if "macvlan_64" in fair_data and "ipvlan_64" in fair_data and fair_data["macvlan_64"] and fair_data["ipvlan_64"]:
+            m_iv = fair_data["macvlan_64"]["intervals"]
+            i_iv = fair_data["ipvlan_64"]["intervals"]
+            if m_iv and i_iv:
+                df_m = pd.DataFrame(m_iv)
+                df_i = pd.DataFrame(i_iv)
+                fig = make_subplots(rows=2, cols=1, subplot_titles=["Throughput (Mbps)", "Lost Packets"])
+                fig.add_trace(go.Scatter(x=df_m["seconds"], y=df_m["bits_per_second"]/1e6, name="macvlan", line=dict(color="#FF6B6B")), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df_i["seconds"], y=df_i["bits_per_second"]/1e6, name="ipvlan", line=dict(color="#4ECDC4")), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df_m["seconds"], y=df_m["lost_packets"], name="macvlan loss", line=dict(color="#FF6B6B", dash="dot")), row=2, col=1)
+                fig.add_trace(go.Scatter(x=df_i["seconds"], y=df_i["lost_packets"], name="ipvlan loss", line=dict(color="#4ECDC4", dash="dot")), row=2, col=1)
+                fig.update_layout(height=500)
+                st.plotly_chart(fig, use_container_width=True)
+    with tab2:
+        if "macvlan_1400" in fair_data and "ipvlan_1400" in fair_data and fair_data["macvlan_1400"] and fair_data["ipvlan_1400"]:
+            m_iv = fair_data["macvlan_1400"]["intervals"]
+            i_iv = fair_data["ipvlan_1400"]["intervals"]
+            if m_iv and i_iv:
+                df_m = pd.DataFrame(m_iv)
+                df_i = pd.DataFrame(i_iv)
+                fig = make_subplots(rows=2, cols=1, subplot_titles=["Throughput (Mbps)", "Lost Packets"])
+                fig.add_trace(go.Scatter(x=df_m["seconds"], y=df_m["bits_per_second"]/1e6, name="macvlan", line=dict(color="#FF6B6B")), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df_i["seconds"], y=df_i["bits_per_second"]/1e6, name="ipvlan", line=dict(color="#4ECDC4")), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df_m["seconds"], y=df_m["lost_packets"], name="macvlan loss", line=dict(color="#FF6B6B", dash="dot")), row=2, col=1)
+                fig.add_trace(go.Scatter(x=df_i["seconds"], y=df_i["lost_packets"], name="ipvlan loss", line=dict(color="#4ECDC4", dash="dot")), row=2, col=1)
+                fig.update_layout(height=500)
+                st.plotly_chart(fig, use_container_width=True)
+
+    # 결론
+    st.header("🔑 핵심 발견")
+    st.markdown("""
+    | 트래픽 특성 | 최적 CNI | 근거 |
+    |------------|----------|------|
+    | 소패킷 고빈도 (64B) | **ipvlan** | 커널 내부 L3, per-packet overhead 낮음 |
+    | 대패킷 고throughput (1400B) | **macvlan** | NIC offload, HW multiqueue |
+
+    **결론**: 트래픽 특성에 따라 최적 CNI가 달라짐 → **동적 전환의 당위성 확인**
+    """)
+    st.stop()
+
+# ═══════════════════════════════════════════════════════
+# 기존 UPF Monitor 모드
+# ═══════════════════════════════════════════════════════
+
+with st.sidebar:
     st.header("🔍 Test Run 선택")
 
     runs = get_available_runs()
@@ -498,6 +690,138 @@ with tab_compare:
 
         if summary_rows:
             st.dataframe(summary_rows, use_container_width=True)
+
+# ═══════════════════════════════════════════════════════
+# iperf3 전환 실험 시각화 (iperf3_full.json 기반)
+# ═══════════════════════════════════════════════════════
+st.divider()
+st.header("🔄 CNI 전환 실험 (iperf3 Interval)")
+
+# iperf3_full.json이 있는 run 찾기
+def get_switch_runs():
+    """iperf3_full.json이 있는 run 목록"""
+    switch_runs = []
+    if not MONITOR_DATA_DIR.exists():
+        return switch_runs
+    for d in sorted(MONITOR_DATA_DIR.iterdir(), reverse=True):
+        if d.is_dir() and (d / "iperf3_full.json").exists():
+            switch_runs.append(d.name)
+    return switch_runs
+
+switch_runs = get_switch_runs()
+
+if switch_runs:
+    import pandas as pd
+
+    selected_switch = st.selectbox("전환 실험 선택", switch_runs, index=0, key="switch_run")
+
+    # 데이터 로딩
+    iperf3_path = MONITOR_DATA_DIR / selected_switch / "iperf3_full.json"
+    with open(iperf3_path) as f:
+        iperf3_data = json.load(f)
+
+    intervals = iperf3_data.get("intervals", [])
+
+    if intervals:
+        # 파싱
+        times = []
+        throughputs = []
+        losses = []
+        lost_pkts = []
+        total_pkts = []
+
+        for iv in intervals:
+            streams = iv.get("streams", [{}])
+            s = streams[0] if streams else {}
+            end = s.get("end", 0)
+            mbps = s.get("bits_per_second", 0) / 1e6
+            lost = s.get("lost_packets", 0)
+            total = s.get("packets", 0)
+            loss_pct = (lost / total * 100) if total > 0 else 0
+
+            times.append(end)
+            throughputs.append(mbps)
+            losses.append(loss_pct)
+            lost_pkts.append(lost)
+            total_pkts.append(total)
+
+        df = pd.DataFrame({
+            "Time (s)": times,
+            "Throughput (Mbps)": throughputs,
+            "Loss (%)": losses,
+            "Packets": total_pkts,
+        })
+
+        # 메타 정보
+        meta_path = MONITOR_DATA_DIR / selected_switch / "metadata.json"
+        switch_meta = {}
+        if meta_path.exists():
+            with open(meta_path) as f:
+                switch_meta = json.load(f)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("🔌 전환", switch_meta.get("cni", selected_switch[:30]))
+        with col2:
+            traffic_info = switch_meta.get("traffic", {})
+            st.metric("📦 패킷", traffic_info.get("packet_size", "?"))
+        with col3:
+            st.metric("⏱ Duration", f"{len(intervals) * 5}s")
+
+        # Throughput 차트 (핵심!)
+        st.markdown("### 📈 Throughput 시계열 (전환 전후)")
+
+        # 전환 시점 표시 (60초)
+        st.caption("⚡ 전환 시점: ~60초 | 빨간 점선 = 전환 지점")
+
+        # plotly 사용 가능하면 더 예쁘지만, 기본 line_chart로
+        chart_df = df.set_index("Time (s)")[["Throughput (Mbps)"]]
+        st.line_chart(chart_df, height=400)
+
+        # 구간 통계
+        before = [t for time, t in zip(times, throughputs) if time <= 60]
+        after = [t for time, t in zip(times, throughputs) if time > 65]
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if before:
+                st.metric("전환 전 평균", f"{sum(before)/len(before):.1f} Mbps")
+        with col2:
+            if after:
+                st.metric("전환 후 평균", f"{sum(after)/len(after):.1f} Mbps")
+        with col3:
+            if before and after:
+                change = (sum(after)/len(after)) / (sum(before)/len(before)) * 100 - 100
+                st.metric("변화율", f"{change:+.1f}%")
+
+        # 상세 테이블
+        with st.expander("📋 Interval 상세 데이터"):
+            display_df = df.copy()
+            display_df["구간"] = display_df["Time (s)"].apply(
+                lambda t: "전환 전" if t <= 60 else ("전환!" if t <= 65 else "전환 후")
+            )
+            st.dataframe(display_df, use_container_width=True)
+
+        # PPS 차트 (초당 패킷 수)
+        st.markdown("### 📊 Packets per Second (PPS)")
+        df["PPS"] = df["Packets"] / 5  # 5초 interval → 초당
+        pps_df = df.set_index("Time (s)")[["PPS"]]
+        st.line_chart(pps_df, height=300)
+
+        # PPS 구간 통계
+        pps_before = [p / 5 for time, p in zip(times, total_pkts) if time <= 60]
+        pps_after = [p / 5 for time, p in zip(times, total_pkts) if time > 65]
+        col1, col2 = st.columns(2)
+        with col1:
+            if pps_before:
+                st.caption(f"전환 전: ~{sum(pps_before)/len(pps_before):,.0f} pps")
+        with col2:
+            if pps_after:
+                st.caption(f"전환 후: ~{sum(pps_after)/len(pps_after):,.0f} pps")
+    else:
+        st.warning("iperf3 interval 데이터가 비어있습니다.")
+else:
+    st.info("전환 실험 데이터 없음 — iperf3_full.json이 포함된 Run이 필요합니다.")
 
 st.caption(f"Monitor Data: `{MONITOR_DATA_DIR}/{selected_run}/` | "
            f"Server: 152.69.227.31:8501")

@@ -1,7 +1,7 @@
 FROM arm64v8/ubuntu:22.04
 
 RUN apt-get update && apt-get install -y \
-    iproute2 iptables kmod \
+    iproute2 iptables kmod iperf3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /free5gc

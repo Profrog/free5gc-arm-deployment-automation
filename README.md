@@ -2,7 +2,7 @@
 
 ARM64 환경에서 free5GC 5G 코어 네트워크를 소스 레벨부터 수정하고, 빌드 → Docker 이미지 → K8s 배포까지 한 번에 돌려서 바로 동작을 확인할 수 있는 개발/테스트 환경입니다.
 
-추가로, **NWDAF ML 모델 기반 동적 CNI 전환(커널 IP 이동 방식)** 연구 환경을 포함합니다.
+추가로, **NWDAF(Random Forest) 기반 동적 CNI 전환 시점 판단** 연구 환경을 포함합니다.
 
 **핵심 워크플로우:**
 ```
@@ -314,7 +314,9 @@ CPU 3     →  시스템 (NFs, NWDAF, monitor, kubelet)
 
 ## References
 
-연구 근거 및 논문 참고문헌: [`traffic-profiles/REFERENCES.md`](traffic-profiles/REFERENCES.md)
+연구 계획서: [`reference/PROPOSAL.md`](reference/PROPOSAL.md)
+
+선행연구 및 설계 결정 근거: [`reference/REFERENCES.md`](reference/REFERENCES.md)
 
 ## License
 

@@ -1,0 +1,7 @@
+description: 500Mbps flat (small pkt, high PPS)
+name: steady-highpps
+packet_size: 128
+pattern: steady
+phases:
+- bandwidth: 500M
+  duration: 120

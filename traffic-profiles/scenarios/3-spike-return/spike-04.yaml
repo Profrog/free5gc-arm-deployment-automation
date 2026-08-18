@@ -4,8 +4,8 @@ packet_size: 1400
 pattern: spike-return
 phases:
 - bandwidth: 100M
-  duration: 92
+  duration: 46
 - bandwidth: 500M
-  duration: 54
+  duration: 27
 - bandwidth: 100M
-  duration: 94
+  duration: 47

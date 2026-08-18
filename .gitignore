@@ -1,3 +1,7 @@
 build/
 free5gc_build/
-free5gc_source/nwdaf/nwdaf-logs/
+free5gc_source/
+arm_docker/core_images/upf/upf
+nwdaf/nwdaf-logs/
+traffic-profiles/monitor-data/
+traffic-profiles/monitor/data/

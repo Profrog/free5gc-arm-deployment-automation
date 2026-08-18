@@ -4,22 +4,22 @@ packet_size: 1400
 pattern: oscillation
 phases:
 - bandwidth: 200M
-  duration: 34
+  duration: 12
 - bandwidth: 300M
-  duration: 34
+  duration: 12
 - bandwidth: 200M
-  duration: 34
+  duration: 12
 - bandwidth: 300M
-  duration: 34
+  duration: 12
 - bandwidth: 200M
-  duration: 34
+  duration: 12
 - bandwidth: 300M
-  duration: 34
+  duration: 12
 - bandwidth: 200M
-  duration: 34
+  duration: 12
 - bandwidth: 300M
-  duration: 34
+  duration: 12
 - bandwidth: 200M
-  duration: 34
+  duration: 12
 - bandwidth: 300M
-  duration: 34
+  duration: 12

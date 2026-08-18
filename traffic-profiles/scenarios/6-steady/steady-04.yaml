@@ -4,4 +4,4 @@ packet_size: 1400
 pattern: steady
 phases:
 - bandwidth: 200M
-  duration: 220
+  duration: 120

@@ -1,0 +1,9 @@
+description: 50→300 in 10s (small pkt)
+name: rapid-06
+packet_size: 128
+pattern: rapid-rise
+phases:
+- bandwidth: 50M
+  duration: 17
+- bandwidth: 300M
+  duration: 103

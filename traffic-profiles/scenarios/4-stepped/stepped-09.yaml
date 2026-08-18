@@ -1,0 +1,11 @@
+description: 150→250 hold→450
+name: stepped-09
+packet_size: 1400
+pattern: stepped
+phases:
+- bandwidth: 150M
+  duration: 34
+- bandwidth: 250M
+  duration: 52
+- bandwidth: 450M
+  duration: 34

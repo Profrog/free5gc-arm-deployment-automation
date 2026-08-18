@@ -1,0 +1,25 @@
+description: 150↔250 x5
+name: osc-02
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 250M
+  duration: 12
+- bandwidth: 150M
+  duration: 12
+- bandwidth: 250M
+  duration: 12

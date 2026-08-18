@@ -1,0 +1,17 @@
+description: 50→500 in 150s (6step)
+name: gradual-01
+packet_size: 1400
+pattern: gradual-rise
+phases:
+- bandwidth: 50M
+  duration: 20
+- bandwidth: 100M
+  duration: 20
+- bandwidth: 200M
+  duration: 20
+- bandwidth: 300M
+  duration: 20
+- bandwidth: 400M
+  duration: 20
+- bandwidth: 500M
+  duration: 20

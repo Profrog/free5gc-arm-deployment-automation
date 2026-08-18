@@ -1,0 +1,11 @@
+description: 200→500→200
+name: spike-08
+packet_size: 1400
+pattern: spike-return
+phases:
+- bandwidth: 200M
+  duration: 46
+- bandwidth: 500M
+  duration: 28
+- bandwidth: 200M
+  duration: 46

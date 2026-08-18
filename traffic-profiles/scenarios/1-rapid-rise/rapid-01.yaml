@@ -1,0 +1,9 @@
+description: 50→300 in 10s
+name: rapid-01
+packet_size: 1400
+pattern: rapid-rise
+phases:
+- bandwidth: 50M
+  duration: 17
+- bandwidth: 300M
+  duration: 103

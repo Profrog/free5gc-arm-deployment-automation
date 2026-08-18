@@ -1,0 +1,7 @@
+description: 500Mbps flat
+name: steady-08
+packet_size: 1400
+pattern: steady
+phases:
+- bandwidth: 500M
+  duration: 120

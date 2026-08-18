@@ -1,0 +1,7 @@
+description: 50Mbps flat
+name: steady-01
+packet_size: 1400
+pattern: steady
+phases:
+- bandwidth: 50M
+  duration: 120

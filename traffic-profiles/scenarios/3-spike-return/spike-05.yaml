@@ -1,0 +1,11 @@
+description: 150→350→150
+name: spike-05
+packet_size: 1400
+pattern: spike-return
+phases:
+- bandwidth: 150M
+  duration: 45
+- bandwidth: 350M
+  duration: 30
+- bandwidth: 150M
+  duration: 45

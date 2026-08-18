@@ -1,0 +1,7 @@
+description: 400Mbps flat
+name: steady-07
+packet_size: 1400
+pattern: steady
+phases:
+- bandwidth: 400M
+  duration: 120

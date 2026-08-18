@@ -29,7 +29,7 @@ phases:
       direction: "downlink"
       packet_size: 1400
       rate: "10Mbps"
-      duration: "60s"
+      duration: "22s"
 
   - name: "gradual_ramp"
     traffic_pattern:
@@ -43,8 +43,8 @@ phases:
         - "150Mbps"
         - "200Mbps"
         - "300Mbps"
-      step_duration: "30s"
-      duration: "180s"
+      step_duration: "11s"
+      duration: "66s"
 
   - name: "steady_high"
     traffic_pattern:
@@ -52,7 +52,7 @@ phases:
       direction: "downlink"
       packet_size: 1400
       rate: "300Mbps"
-      duration: "60s"
+      duration: "32s"
 
 measurement:
   monitor_interval: 5

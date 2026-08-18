@@ -1,0 +1,84 @@
+---
+# macvlan 서버: iperf3 수신
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fair-macvlan-server
+  namespace: free5gc
+  annotations:
+    k8s.v1.cni.cncf.io/networks: fair-macvlan
+spec:
+  containers:
+  - name: iperf3
+    image: networkstatic/iperf3:latest
+    command: ["iperf3", "-s"]
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "128Mi"
+---
+# macvlan 클라이언트: iperf3 송신
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fair-macvlan-client
+  namespace: free5gc
+  annotations:
+    k8s.v1.cni.cncf.io/networks: fair-macvlan
+spec:
+  containers:
+  - name: iperf3
+    image: networkstatic/iperf3:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "128Mi"
+---
+# ipvlan 서버: iperf3 수신
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fair-ipvlan-server
+  namespace: free5gc
+  annotations:
+    k8s.v1.cni.cncf.io/networks: fair-ipvlan
+spec:
+  containers:
+  - name: iperf3
+    image: networkstatic/iperf3:latest
+    command: ["iperf3", "-s"]
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "128Mi"
+---
+# ipvlan 클라이언트: iperf3 송신
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fair-ipvlan-client
+  namespace: free5gc
+  annotations:
+    k8s.v1.cni.cncf.io/networks: fair-ipvlan
+spec:
+  containers:
+  - name: iperf3
+    image: networkstatic/iperf3:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "128Mi"

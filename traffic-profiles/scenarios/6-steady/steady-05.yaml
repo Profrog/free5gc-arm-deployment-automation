@@ -1,0 +1,7 @@
+description: 250Mbps flat
+name: steady-05
+packet_size: 1400
+pattern: steady
+phases:
+- bandwidth: 250M
+  duration: 120

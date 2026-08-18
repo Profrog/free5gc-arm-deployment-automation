@@ -1,0 +1,11 @@
+description: 50→300 in 90s (3step)
+name: gradual-04
+packet_size: 1400
+pattern: gradual-rise
+phases:
+- bandwidth: 50M
+  duration: 40
+- bandwidth: 150M
+  duration: 40
+- bandwidth: 300M
+  duration: 40

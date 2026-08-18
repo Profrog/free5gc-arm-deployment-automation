@@ -1,0 +1,11 @@
+description: 50→300→50 (short spike)
+name: spike-09
+packet_size: 1400
+pattern: spike-return
+phases:
+- bandwidth: 50M
+  duration: 45
+- bandwidth: 300M
+  duration: 14
+- bandwidth: 50M
+  duration: 61

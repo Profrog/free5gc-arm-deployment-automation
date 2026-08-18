@@ -1,0 +1,10 @@
+=== B-T1: ipvlan + large traffic (60s) ===
+CNI: ipvlan
+Date: 2026-08-11T08:40:03+00:00
+Config: iperf3 -c 10.10.3.1 -p 5201 -u -b 500M -l 1400 -t 60
+
+Result (receiver):
+  Throughput: 489 Mbps
+  Packet Loss: 2.1% (55,021 / 2,678,610)
+  Jitter: 0.005 ms
+  Transfer: 3.42 GBytes

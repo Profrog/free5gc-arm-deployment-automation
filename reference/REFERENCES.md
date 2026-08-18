@@ -1,179 +1,6 @@
-# References — UPF Data Plane Benchmarking
+# References — 선행연구 레퍼런스 및 설계 결정
 
-본 문서는 연구 제안서, 선행연구 레퍼런스(A), 본 연구의 설계 결정(B)으로 구성됩니다.
-
-트래픽 프로파일 설계 시 참고한 논문 및 벤치마크 자료.
-
-> **⚠️ 설계 변경 사항 (2026-08-09)**
-> 초기 설계에서는 DRANET(DRA ResourceClaim)을 통한 인터페이스 전환을 계획하였으나,
-> DRANET은 ipvlan/macvlan 서브인터페이스 **생성**을 지원하지 않음이 확인되었다.
-> 최종 구현은 **커널 수준 IP 이동 방식**(dual-interface + `ip addr del/add`)으로,
-> Pod/프로세스 재시작 없이 ~140ms 무중단 전환을 달성한다.
-> 본 문서에서 DRANET 관련 기술은 선행연구 참조로만 유효하며, 
-> 실제 전환 메커니즘은 "무중단 인터페이스 전환 메커니즘" 섹션 참조.
-
----
-
-## 연구 제안서 — 논문 구조 및 실험 프로세스 요약
-
-### Title
-
-"NWDAF-Driven Dynamic CNI Backend Selection for Cloud-Native 5G Core on ARM: Intelligent Network Plane Management via Zero-Downtime IP Migration"
-
-### Abstract (Draft)
-
-Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Container Network Interface(CNI) 드라이버 구현에 영향을 받는다. 선행연구에서 ipvlan과 macvlan은 패킷 분배 로직의 차이로 인해 workload 특성에 따라 상이한 성능을 보임이 확인되었으나, 5GC UPF 환경에서 이를 런타임에 동적으로 전환하고 그 판단의 정확성을 검증한 연구는 부재한다. 본 연구는 3GPP TS 23.288 NWDAF의 AnLF를 ML 분류 모델(Random Forest)로 구현하여 UPF KPI를 실시간 분석하고, 커널 수준 IP 이동 방식으로 CNI backend(ipvlan↔macvlan)를 Pod 재시작 없이 무중단 전환하는 closed-loop 시스템을 ARM64 환경에서 설계, 구현, 검증한다. 실험은 3가지 트래픽 시나리오와 3가지 CNI 전략의 조합(9개 실험)으로 구성되며, 전환 시간(~140ms), 전환 판단 정확성, 그리고 고정 CNI 대비 동적 전환의 실효성을 평가한다.
-
-### 논문 구조
-
-```
-1. Introduction
-   - 문제 정의: 정적 CNI 할당의 한계
-   - 연구 질문: "NWDAF가 CNI 전환을 올바르게 판단하는가?"
-   - Contribution 요약
-
-2. Background & Related Work
-   - 5GC UPF data plane (TS 23.501)
-   - NWDAF 아키텍처 (TS 23.288, AnLF/MTLF 분리)
-   - CNI 성능 비교 선행연구 (Qi 2021 IEEE TNSM)
-   - ipvlan vs macvlan 커널 메커니즘 (Bandewar 2015)
-   - DRANET/DRA — 선행연구 참조 (미채택 근거 포함)
-
-3. System Design
-   - 전체 아키텍처: free5GC + NWDAF on ARM64 K8s (단일 노드, 4 vCPU)
-   - 전환 메커니즘: dual-bridge + ip -batch (커널 수준 IP 이동)
-   - NWDAF AnLF: OAM 수집 → ML 추론 → 전환 실행
-   - ML 모델: Random Forest (model-agnostic 표준 준수)
-   - 격리 설계: CPU pinning, 코어 분리
-
-4. Experiment Design
-   - 실험 매트릭스 (3×3)
-   - 트래픽 프로파일 (3GPP 표준 기반)
-   - 측정 방법론 (IETF BMWG 준수)
-   - 격리 검증 방법 (per-CPU, steal time)
-
-5. Baseline Measurement
-   - ipvlan 고정 성능 측정 (A-T1, A-T2)
-   - macvlan 고정 성능 측정 (B-T1, B-T2)
-   - CNI별 차이 확인 → NWDAF 실험의 전제 검증
-   - 선행연구(Qi 2021)와의 경향 일치 확인
-
-6. Evaluation
-   - NWDAF 판단 정확성 (C-T1, C-T2: 올바른 CNI 선택 여부)
-   - 동적 전환 효과 (C-T3 vs A-T3, B-T3: 전체 구간 KPI 비교)
-   - 전환 비용 (전환 순간 throughput dip, 안정화 시간)
-   - NWDAF 오버헤드 (CPU 3 사용량: B vs C 차이)
-   - False positive 분석 (불필요한 전환 횟수)
-   - 격리 검증 (per-CPU flat + steal time < 1%)
-
-7. Discussion
-   - 가설 지지/불지지 해석
-   - ARM64 환경 특성
-   - 전환 빈도 최적화 (cooldown 파라미터 영향)
-   - Limitation: 단일 노드, 2 CNI만, OAM 방식
-
-8. Conclusion & Future Work
-   - 결론
-   - Future Work: Nupf Event Exposure, SR-IOV 확장, 다중 NF 전환, 딥러닝 모델
-```
-
-### 실험 프로세스 (End-to-End)
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Phase 0: 환경 준비                                       │
-├─────────────────────────────────────────────────────────┤
-│ 1. K8s 클러스터 + CPU Manager static policy 설정        │
-│ 2. Multus CNI + dual-bridge 구성 (n3br + n3br-ipv)     │
-│ 3. free5GC NFs 배포 (UPF: CPU 0,1 pinning)             │
-│ 4. NWDAF Pod 배포 (replicas=0, 대기)                    │
-│ 5. ML 모델 학습 (train-model.py)                        │
-│ 6. iperf3-server 배포                                    │
-└─────────────────────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────┐
-│ Phase 1: Baseline 측정 (A, B 실험)                       │
-├─────────────────────────────────────────────────────────┤
-│ for experiment in A-T1 A-T2 A-T3 B-T1 B-T2 B-T3:      │
-│   1. NWDAF OFF                                           │
-│   2. CNI 고정 설정 (nwdaf-switch.sh ipvlan/macvlan)      │
-│   3. 모니터링 시작 (per-CPU + steal time 포함)           │
-│   4. 트래픽 실행 (traffic-gen Job, phases 순차)          │
-│   5. 모니터링 종료, 결과 저장                            │
-│   6. 5회 반복                                            │
-└─────────────────────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────┐
-│ Phase 2: NWDAF 실험 (C 실험)                             │
-├─────────────────────────────────────────────────────────┤
-│ for experiment in C-T1 C-T2 C-T3:                       │
-│   1. NWDAF ON (scale replicas=1)                         │
-│   2. 초기 CNI 설정 (의도적으로 비최적으로 시작)          │
-│   3. 모니터링 시작                                       │
-│   4. 트래픽 실행                                         │
-│   5. NWDAF가 감지 → 전환 판단 → 실행 (자동)             │
-│   6. 모니터링 종료, NWDAF 로그 수집                      │
-│   7. 5회 반복                                            │
-└─────────────────────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────┐
-│ Phase 3: 분석 및 검증                                    │
-├─────────────────────────────────────────────────────────┤
-│ 1. 격리 검증: per-CPU 시계열 → CPU 2,3 flat 확인        │
-│ 2. steal time 검증: 전 실험 < 1% 확인                   │
-│ 3. Baseline 비교: A-T1 vs B-T1 → CNI 차이 유의미?      │
-│ 4. NWDAF 정확성: C-T1→macvlan 선택? C-T2→ipvlan 선택?  │
-│ 5. 동적 전환 효과: C-T3 vs A-T3, B-T3 전체 구간 평균   │
-│ 6. 전환 비용: dip 길이/크기, CPU 3 spike                │
-│ 7. 통계: 5회 반복의 평균 ± 표준편차, 95% CI             │
-└─────────────────────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────┐
-│ Phase 4: 결과 해석                                       │
-├─────────────────────────────────────────────────────────┤
-│ Case 1: C-T3 > A-T3, B-T3                              │
-│   → "동적 전환이 고정 대비 우위, NWDAF 판단 유효"       │
-│                                                          │
-│ Case 2: C-T3 ≈ B-T3                                    │
-│   → "전환 비용이 이득을 상쇄, cooldown 최적화 필요"     │
-│                                                          │
-│ Case 3: C-T3 < B-T3                                    │
-│   → "동적 전환의 비용 > 이득, 전환 조건 재설계 필요"    │
-│                                                          │
-│ 어떤 경우든 유효한 학술 기여 (올바른 방법으로 검증)      │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Contribution (1개로 집중)
-
-> NWDAF ML 모델이 UPF의 KPI를 기반으로 CNI backend 전환을 올바르게 판단하는지를, 커널 수준 IP 이동 기반 closed-loop 시스템으로 구현하고, ARM64 containerised 환경에서 격리된 실험으로 검증한다.
-
-### 방어 포인트 체크리스트
-
-| # | 예상 공격 | 방어 | 근거 |
-|---|----------|------|------|
-| 1 | NWDAF 구현이 너무 단순 | AnLF만 구현은 Rel-17이 허용, 학계도 동일 범위 | A4 (TS 23.288 §6.2A), A8 |
-| 2 | 프로파일이 표준 준수? | 3GPP TR 38.913, TS 22.261 파라미터 직접 사용 | A10 |
-| 3 | KPI 비교로 판단 평가 가능? | NWDAF feedback loop = 표준 패턴, ETSI/O-RAN도 동일 방식 | A9-B |
-| 4 | CNI 변경→KPI 인과관계? | 선행연구 5편 + CPU pinning으로 변수 격리 | A9-A, B5 |
-| 5 | Nupf 미구현 | OAM은 표준 경로, 오픈소스 5GC 공통, 측정 대상 성능 무영향 | B3 |
-| 6 | ML 모델 단순 | model-agnostic 표준, RF는 학계 4편 선례, ARM64 추론 <1ms | B4 |
-| 7 | VM 환경 격리 | steal time < 1% 검증, per-CPU 시계열로 격리 확인 | B5 |
-| 8 | ipvlan/macvlan만 | ARM64 가용성, 단일 변수 통제, 커널 제약으로 2종이 현실적 최대 | B1, B10 |
-| 9 | DRANET 안 쓰는데? | ipvlan↔macvlan 미지원 확인, IP 변경 위험, 전환 수 초 (본 연구 ~140ms) | A7 |
-| 10 | 단일 노드에서 일반화 가능? | IETF BMWG 준수 + 5회 반복 + 통계(95% CI), Limitation에 명시 | B2, B6 |
-| 11 | 왜 ARM? x86이 더 좋잖아 | ARM에서 경로 차이가 더 크게 관측됨 → 실험 민감도 향상 | A11 |
-| 12 | 표준 위반 아닌가? (NWDAF→인프라) | 3GPP scope 밖 = 위반 아님, operator-specific implementation | B8, B9 |
-| 13 | 전환 중 패킷 drop은? | ip -batch로 μs 단위 gap, cost-benefit으로 정량화 | B7 |
-| 14 | 기존 연구와 뭐가 다른가? | 기존은 판단까지, 본 연구는 인프라 실행 + 무중단 + 검증 | A8, A12 |
-
----
-
-# A. 선행연구 레퍼런스
+연구 계획서는 `PROPOSAL.md` 참조.
 
 ---
 
@@ -634,6 +461,18 @@ free5GC Blog (2024.11):
 ### 논문에서의 서술
 
 > "3GPP TS 23.288은 NWDAF 데이터 수집 경로로 NF Event Exposure, OAM, DCCF를 정의하며, 본 연구는 OAM 경로를 채택한다. 이는 (1) Nupf Event Exposure가 오픈소스 5GC(free5GC, Open5GS)에 미구현된 현실[survey2025], (2) Event Exposure 구현 시 UPF 성능 오버헤드(+0.11ms, +6.5% CPU)[waterloo2026]가 실험 결과를 왜곡할 수 있는 점, (3) OAM 방식이 학계 NWDAF 연구의 표준적 수집 방법인 점을 고려한 설계 선택이다. 수집 메트릭(throughput, packet loss, CPU/memory)은 TS 23.288 Network Performance Analytics ID의 입력 데이터와 동일하다."
+
+### Prometheus 미채택 근거
+
+| 항목 | Prometheus + Grafana | 본 연구 (경량 OAM) |
+|------|---------------------|-------------------|
+| 추가 Pod | 2~3개 (Prometheus, Grafana, node-exporter) | 0개 (bash 스크립트) |
+| CPU 오버헤드 | 상시 CPU 점유 | 수집 순간만 (무시 가능) |
+| 4vCPU 환경 적합성 | ❌ UPF와 경합 발생 | ✅ 경합 없음 |
+| 측정 왜곡 | ⚠️ 모니터링이 UPF 성능에 영향 | ✅ 측정과 피측정 분리 |
+| IETF BMWG 격리 원칙 | 위반 가능 | ✅ 준수 |
+
+> "단일 노드 4vCPU 환경에서 Prometheus+Grafana 스택을 추가하면 UPF와 리소스 경합이 발생하여 측정 결과를 왜곡한다. 본 연구는 IETF BMWG의 격리 원칙에 따라 경량 OAM 방식(kubectl top + /proc/net/dev)을 채택하여, 모니터링 시스템이 측정 대상에 영향을 주지 않도록 설계하였다."
 
 ---
 

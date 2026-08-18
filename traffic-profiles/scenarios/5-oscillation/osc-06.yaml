@@ -1,0 +1,29 @@
+description: 50↔150 x6
+name: osc-06
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 50M
+  duration: 10
+- bandwidth: 150M
+  duration: 10
+- bandwidth: 50M
+  duration: 10
+- bandwidth: 150M
+  duration: 9
+- bandwidth: 50M
+  duration: 10
+- bandwidth: 150M
+  duration: 10
+- bandwidth: 50M
+  duration: 10
+- bandwidth: 150M
+  duration: 10
+- bandwidth: 50M
+  duration: 10
+- bandwidth: 150M
+  duration: 10
+- bandwidth: 50M
+  duration: 9
+- bandwidth: 150M
+  duration: 12

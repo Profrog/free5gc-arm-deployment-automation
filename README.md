@@ -2,7 +2,7 @@
 
 ARM64 환경에서 free5GC 5G 코어 네트워크를 소스 레벨부터 수정하고, 빌드 → Docker 이미지 → K8s 배포까지 한 번에 돌려서 바로 동작을 확인할 수 있는 개발/테스트 환경입니다.
 
-추가로, **NWDAF ML 모델 기반 동적 CNI 전환(커널 IP 이동 방식)** 연구 환경을 포함합니다.
+추가로, **NWDAF(Random Forest) 기반 동적 CNI 전환 시점 판단** 연구 환경을 포함합니다.
 
 **핵심 워크플로우:**
 ```
@@ -124,6 +124,20 @@ done
 ./traffic-profiles/monitor/monitor-collector.sh --stop
 ```
 
+### 6. 빠른 Baseline 테스트 (모니터링 자동 포함)
+
+```bash
+cd traffic-profiles
+
+# macvlan 60초 (CNI 전환 + 모니터링 + iperf3 + 결과 저장)
+./quick-test.sh macvlan 60
+
+# ipvlan 60초
+./quick-test.sh ipvlan 60
+
+# 결과: monitor-data/{cni}_{timestamp}/
+```
+
 ## Experiment Matrix
 
 ```
@@ -236,6 +250,25 @@ streamlit run app.py --server.port 8501
 - **per-CPU 시계열**: CPU 2,3(시스템 코어)이 실험 조건에 무관하게 flat → 격리 성공
 - **steal time**: 전 실험 구간에서 < 1% → 가상화 간섭 없음 확인
 
+## Baseline Experiment Results (동작 검증)
+
+테스트 환경에서 CNI 전환에 따른 KPI 차이가 실측으로 확인됨.
+
+### A-T1 vs B-T1: 대규모 트래픽 (UDP 500Mbps, 1400B, 60초)
+
+| 항목 | A-T1 (macvlan) | B-T1 (ipvlan) | 차이 |
+|------|---------------|--------------|------|
+| Offered | 500 Mbps | 500 Mbps | — |
+| Receiver throughput | 498 Mbps | 489 Mbps | macvlan +9 Mbps |
+| Packet loss | 0.28% (7,436) | 2.1% (55,021) | macvlan이 7.4× 낮음 |
+| Jitter | 0.005 ms | 0.005 ms | 동일 |
+
+**결론**: 대규모 트래픽에서 macvlan이 유리 (선행연구 예측 일치). CNI 전환의 실효성 확인.
+
+전환 시간: macvlan → ipvlan **134ms** (ip -batch, 무중단)
+
+로그 위치: [`traffic-profiles/baseline-results/`](traffic-profiles/baseline-results/)
+
 ## Key Design Decisions
 
 | 결정 | 이유 |
@@ -281,7 +314,9 @@ CPU 3     →  시스템 (NFs, NWDAF, monitor, kubelet)
 
 ## References
 
-연구 근거 및 논문 참고문헌: [`traffic-profiles/REFERENCES.md`](traffic-profiles/REFERENCES.md)
+연구 계획서: [`reference/PROPOSAL.md`](reference/PROPOSAL.md)
+
+선행연구 및 설계 결정 근거: [`reference/REFERENCES.md`](reference/REFERENCES.md)
 
 ## License
 

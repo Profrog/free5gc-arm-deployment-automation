@@ -1,0 +1,25 @@
+description: 100↔200 x5
+name: osc-01
+packet_size: 1400
+pattern: oscillation
+phases:
+- bandwidth: 100M
+  duration: 12
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 100M
+  duration: 12
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 100M
+  duration: 12
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 100M
+  duration: 12
+- bandwidth: 200M
+  duration: 12
+- bandwidth: 100M
+  duration: 12
+- bandwidth: 200M
+  duration: 12

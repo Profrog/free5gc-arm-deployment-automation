@@ -20,23 +20,33 @@ Cloud-native 5G Core에서 User Plane Function(UPF)의 data plane 성능은 Cont
 
 ## Contribution
 
-NWDAF(Random Forest)가 UPF의 KPI를 기반으로, Pod 재생성 비용(downtime)을 포함한 전체 세션 throughput이 고정 CNI 및 Rule-based 대비 개선되는 전환 시점을 올바르게 판단하는지를, 공정 조건(물리 NIC 직접 분기) ARM64 환경에서 실증한다.
+1. NWDAF(Random Forest)가 UPF의 KPI를 기반으로, Pod 재생성 비용(downtime)을 포함한 전체 세션 throughput이 고정 CNI 및 Rule-based 대비 개선되는 전환 시점을 올바르게 판단하는지를, 공정 조건(물리 NIC 직접 분기) ARM64 환경에서 실증한다.
+
+2. ML 기반 네트워크 의사결정 시스템의 평가 기준으로, 분류 정확도(accuracy)가 아닌 결정의 실효적 이득(total bytes received)을 직접 측정하는 평가 프레임워크를 제안한다. 이를 통해 전환 비용, 판단 오류, 타이밍 등 모든 요소가 단일 메트릭에 자연 반영되며, 다양한 모델 간 공정 비교가 가능해진다.
 
 ---
 
-## 핵심 발견 (2026-08-18 실험)
+## Preliminary Results
 
-기존 dual-bridge 인프라에서 "macvlan 항상 우위"로 보였던 결과는 ipvlan 경로의 veth pair 추가 경유에 의한 **인프라 편향**이었음.
-
-물리 NIC(enp1s0) 직접 분기 공정 조건에서 재측정:
+공정 조건(물리 NIC 직접 분기)에서 측정:
 
 | 조건 | macvlan | ipvlan | 유리 |
 |------|---------|--------|------|
-| 소패킷 64B (high pps) | loss 2.64% | loss 2.42% | **ipvlan** |
-| 대패킷 1400B (500Mbps) | loss 0.16% | loss 0.33% | **macvlan** |
+| 소패킷 64B (high pps) | loss 2.64% | loss 2.42% | ipvlan |
+| 대패킷 1400B (500Mbps) | loss 0.16% | loss 0.33% | macvlan |
 
-→ 선행연구 가설(트래픽 특성에 따라 최적 CNI 상이) **재현 확인**
+→ 트래픽 특성에 따라 최적 CNI가 상이함을 실증
 → 동적 전환의 당위성 확보
+
+---
+
+## 현재 진행 상태
+
+- ARM64 K8s 클러스터 + free5GC 전체 NF 배포 완료 (동작 중)
+- NWDAF 엔진 구현 완료 (Random Forest 학습/추론 파이프라인)
+- 트래픽 생성기 및 모니터링 시스템 구축 완료
+- Baseline 측정 데이터 확보 (ipvlan/macvlan 공정 비교)
+- 남은 작업: 전환 실험(C, D) 수행 → 비교 분석 → 논문 writing
 
 ---
 
@@ -76,7 +86,6 @@ NWDAF(Random Forest)가 UPF의 KPI를 기반으로, Pod 재생성 비용(downtim
    - Reaction Time: 전환 필요 시점 대비 지연
 
 6. Discussion
-   - dual-bridge 편향 발견
    - ARM64 커널 경로 특성
    - RF 한계, 후속 연구(다중 모델 비교)
    - Limitation
@@ -121,46 +130,6 @@ NWDAF(Random Forest)가 UPF의 KPI를 기반으로, Pod 재생성 비용(downtim
   - Reaction Time: T1, T2에서 정답 시점 대비 지연(초)
 ```
 
-### 검증 셋
 
-- 학습 패턴과 동일 구조, 다른 파라미터 (노이즈/수치 변동)
-- 120초 통일
-- 과적합 아닌 일반화 검증
 
----
 
-## 실험 프로세스
-
-```
-Phase 0: 환경 준비
-  - K8s 클러스터 + CPU pinning
-  - 공정 NAD (fair-ipvlan, fair-macvlan on enp1s0)
-  - free5GC NFs 배포
-  - ML 모델 학습 (ml-training/train-model.py)
-
-Phase 1: Baseline (A, B)
-  - 각 패턴(T1~T5) × 각 CNI(ipvlan/macvlan) × 5회 반복
-  - total bytes received 기록
-
-Phase 2: 전환 실험 (C, D)
-  - 각 패턴(T1~T5) × 각 전략(Rule/RF) × 5회 반복
-  - ipvlan으로 시작 → 전환 판단 → (전환 or hold) → 종료
-  - total bytes received 기록 (downtime loss 자연 포함)
-
-Phase 3: 비교 분석
-  - D > A, B, C 확인
-  - T3, T5에서 FP 확인
-  - 95% CI 통계
-```
-
----
-
-## 변경 이력
-
-| 일자 | 변경 사항 |
-|------|----------|
-| 2026-08-09 | DRANET → 커널 수준 IP 이동 (무중단 전환) |
-| 2026-08-18 | IP 이동 → Pod 재생성 (표준 방식, 전환 비용 실재) |
-| 2026-08-18 | dual-bridge 편향 발견 → 공정 조건(물리 NIC 직접) 재측정 |
-| 2026-08-18 | 단일 RF + Rule-based baseline으로 확정 (다중 모델은 후속 연구) |
-| 2026-08-18 | 전 패턴 120초 통일, 평가 기준 = total bytes received |

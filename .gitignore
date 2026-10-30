@@ -5,3 +5,6 @@ arm_docker/core_images/upf/upf
 nwdaf/nwdaf-logs/
 traffic-profiles/monitor-data/
 traffic-profiles/monitor/data/
+
+# 수동 proposal 백업 (git이 버전관리하므로 리포에 불필요)
+reference/PROPOSAL.backup-*.md

@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-nwdaf-engine.py — NWDAF AnLF Closed-Loop Engine
+nwdaf-engine.py — NWDAF-inspired Closed-Loop Controller (custom AnLF-style)
 
-3GPP TS 23.288 AnLF 최소 구현:
+NWDAF(3GPP TS 23.288)의 closed-loop 패턴을 차용한 커스텀 제어기.
+(표준 NWDAF 완전 준수 구현이 아니며, closed-loop 패턴 차용에 한정. 표준화는 제언 수준.)
+
+논리적 역할 분리 (표준 producer/consumer 구조에 대응):
+  [판단부 = AnLF 역할]
   1. OAM 경로로 KPI 수집 (kubectl top + /proc/net/dev)
-  2. ML 모델로 최적 CNI backend 분류 (ipvlan vs macvlan)
+  2. ML/RL 모델로 최적 CNI backend 판단 (ipvlan vs macvlan)
+  [집행부 = consumer 역할]
   3. nwdaf-switch.sh로 커널 레벨 IP 이동 전환 실행
   4. 전환 전후 KPI 비교로 판단 정확성 검증
 

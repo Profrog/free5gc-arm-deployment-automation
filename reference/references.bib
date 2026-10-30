@@ -535,3 +535,172 @@
                   exclusive cpuset 할당. 물리 코어를 Pod에 pinning.
                   의의: UPF에 전용 코어 할당 → 모니터링과 격리 → 측정 왜곡 방지.}
 }
+
+% ── C. 외부 선행연구: Gap 검증 및 방법론 선례 (2026-10 수집) ──
+
+@article{dakic2024cni,
+  title        = {Performance and Latency Efficiency Evaluation of {Kubernetes}
+                  {Container} {Network} {Interfaces} for Built-In and Custom Tuned Profiles},
+  author       = {Dakic, Vedran and Redzepagic, Jasmin and Basic, Matej and Zgrablic, Luka},
+  journal      = {Electronics},
+  volume       = {13},
+  number       = {19},
+  pages        = {3972},
+  year         = {2024},
+  publisher    = {MDPI},
+  doi          = {10.3390/electronics13193972},
+  url          = {https://www.mdpi.com/2079-9292/13/19/3972},
+  note         = {CNI별 성능이 소패킷/대패킷·워크로드에 따라 다름을 독립 실증.
+                  본 연구 전제(트래픽별 최적 CNI 상이)의 외부 근거. 단, 정적 비교에 그침.}
+}
+
+@inproceedings{kang2021cni,
+  title        = {A Comprehensive Performance Evaluation of Different {Kubernetes}
+                  {CNI} Plugins for Edge-based and Containerized Publish/Subscribe Applications},
+  author       = {Kang, Zhuangwei and An, Kyoungho and Gokhale, Aniruddha and Pazandak, Paul},
+  booktitle    = {IEEE International Conference on Cloud Engineering (IC2E)},
+  year         = {2021},
+  url          = {https://www.dre.vanderbilt.edu/~gokhale/WWW/papers/IC2E21_CNI_Eval.pdf},
+  note         = {ARM+AMD 하이브리드 엣지 K8s에서 CNI 오버헤드 평가. ARM 엣지 선례.}
+}
+
+@article{siew2022fire,
+  title        = {{FIRE}: A Failure-Adaptive Reinforcement Learning Framework
+                  for Edge Computing Migrations},
+  author       = {Siew, Marie and Sharma, Shikhar and Li, Zekai and Guo, Kun and
+                  Xu, Chao and Lorido-Botran, Tania and Quek, Tony Q. S. and Joe-Wong, Carlee},
+  journal      = {IEEE Transactions on Services Computing (accepted); arXiv:2209.14399},
+  year         = {2025},
+  doi          = {10.48550/arXiv.2209.14399},
+  url          = {https://arxiv.org/abs/2209.14399},
+  note         = {디지털 트윈(시뮬)에서 RL 학습, migration cost 포함 목적함수,
+                  greedy/vanilla RL baseline 비교. 본 연구 방법론 골격의 직접 선례.}
+}
+
+@article{liu2024migration,
+  title        = {Low-Latency Layer-Aware Proactive and Passive Container
+                  Migration in Meta Computing},
+  author       = {Liu, Mengjie and Li, Yihua and Mou, Fangyi and Tang, Zhiqing and
+                  Lou, Jiong and Guo, Jianxiong and Jia, Weijia},
+  journal      = {arXiv:2406.13404},
+  year         = {2024},
+  doi          = {10.48550/arXiv.2406.13404},
+  url          = {https://arxiv.org/abs/2406.13404},
+  note         = {migration cost vs latency 트레이드오프를 policy-gradient RL로.
+                  비용-이득 break-even 의사결정의 RL 선례.}
+}
+
+% ── C5. 대표 적용 도메인: 스마트팩토리 머신비전 Private 5G (2026-10 수집) ──
+
+@techreport{5gacia2022machinevision,
+  title        = {Architecture and Technology for Machine Vision in Industrial
+                  Applications with {5G}},
+  author       = {{5G-ACIA}},
+  institution  = {5G Alliance for Connected Industries and Automation (5G-ACIA)},
+  type         = {White Paper},
+  year         = {2022},
+  url          = {https://5g-acia.org/},
+  note         = {머신비전이 high availability + bandwidth를 요구하는 고대역폭 지속
+                  트래픽(elephant flow)임을 산업 표준 단체가 공인. 도메인 정당화 1순위.}
+}
+
+@inproceedings{seliem2025smartfactory,
+  title        = {{QoS}-Aware Proportional Fairness Scheduling for Multi-Flow {5G}
+                  {UEs}: A Smart Factory Perspective},
+  author       = {Seliem, Mohamed and Roedig, Utz and Sreenan, Cormac and Pesch, Dirk},
+  booktitle    = {Proc. ACM/IEEE Int. Conf. on Modeling, Analysis and Simulation of
+                  Wireless and Mobile Systems (MSWiM)},
+  year         = {2025},
+  doi          = {10.48550/arXiv.2508.21783},
+  url          = {https://arxiv.org/abs/2508.21783},
+  note         = {공장 단말이 edge-hosted machine vision + real-time control loops +
+                  bulk data transfer를 동시 처리(트래픽 교차 근거). Simu5G 기반 →
+                  본 연구 시뮬 학습 전략과 방법론적 정합. 제어계층은 RAN QoS(상호보완).}
+}
+
+@misc{enterpriseviewpoint2022private5gaas,
+  title        = {Edge Computing for Private {5GaaS}},
+  author       = {{EnterpriseViewpoint}},
+  year         = {2022},
+  howpublished = {Industry Article},
+  url          = {https://enterpriseviewpoint.com/edge-computing-for-private-5gaas/},
+  note         = {Private 5G core가 server room/smart rack 내 2-3 물리 서버에서 운영됨.
+                  자원제약·스케일아웃 제한 환경 근거 (scope 조건 1,2).}
+}
+
+@techreport{astri_private5g_edge,
+  title        = {Streamlined Deployment of Private {5G} Networks with Edge Services},
+  author       = {{ASTRI}},
+  institution  = {Hong Kong Applied Science and Technology Research Institute (ASTRI)},
+  year         = {2022},
+  url          = {https://www.astri.org/},
+  note         = {single physical host 통합 배치로 CapEx/OpEx 효율 확보. "하드웨어
+                  가속/증설을 비용·운영상 못 쓴다"는 contrived-scope 방어 핵심 근거.}
+}
+
+@misc{nokia_video_surveillance,
+  title        = {Video Surveillance \& Analytics --- Private Networks},
+  author       = {{Nokia}},
+  year         = {2021},
+  howpublished = {Nokia Solution Page},
+  url          = {https://www.nokia.com/private-networks/video-surveillance/},
+  note         = {4K/8K 영상이 요구하는 uplink bandwidth/QoS. elephant flow 규모·
+                  지속성의 산업적 실체 (scope 조건 4).}
+}
+
+% ── C6. 가장 가까운 선행연구: Novelty 방어 (2026-10 수집) ──
+
+@inproceedings{christakis2025upfswitching,
+  title        = {Dynamic {AI}-Based {UPF} Switching: Adapting for
+                  Performance/Energy-Efficiency in {5G} Networks},
+  author       = {Christakis, Sokratis and Makris, Nikos and Fdida, Serge and Korakis, Thanasis},
+  booktitle    = {Proc. IEEE Global Communications Conference (GLOBECOM)},
+  year         = {2025},
+  url          = {https://sunrise6g.eu/wp-content/uploads/2026/01/UPF_Switching_Final-Globecom-2025.pdf},
+  note         = {★ 가장 가까운 경쟁 논문. UPF 앱 구현(SPGW-U/VPP)을 LSTM 예측 기반
+                  동적 전환, throughput vs energy. 차별점: 본 연구는 CNI 데이터패스
+                  (ipvlan/macvlan, L2/L3) 전환 + downtime 비용 내재화 RL. 필수 인용.}
+}
+
+@inproceedings{moreira2026eupf,
+  title        = {An Intelligent {eUPF} for Time-Sensitive Path Selection in {B5G}
+                  Edge Networks},
+  author       = {Moreira, Rodrigo and Moreira, Larissa Ferreira Rodrigues and
+                  Carvalho, Tereza Cristina and Silva, Fl\'avio de Oliveira},
+  booktitle    = {Proc. Int. Conf. on Computational Science and Its Applications (ICCSA)},
+  year         = {2026},
+  doi          = {10.48550/arXiv.2605.01475},
+  url          = {https://arxiv.org/abs/2605.01475},
+  note         = {DQN+POMDP로 eUPF의 MEC/cloud 경로 선택, eBPF passive delay 측정.
+                  방법 유사(RL 정합 근거). 차별점: 대상이 경로(path)이지 CNI 아님.}
+}
+
+@article{bhat2026flowalloc,
+  title        = {Post-Decision State-Based Online Learning for Delay-Energy-Aware
+                  Flow Allocation in Wireless Systems},
+  author       = {Bhat, Mahesh Ganesh and Moothedath, Shana and Chaporkar, Prasanna},
+  journal      = {arXiv:2601.03108 (submitted to IEEE ICC 2026)},
+  year         = {2026},
+  doi          = {10.48550/arXiv.2601.03108},
+  url          = {https://arxiv.org/abs/2601.03108},
+  note         = {UPF 간 flow allocation을 PDS 기반 RL로, 시뮬 학습. 골격 겹침.
+                  차별점: 대상이 UPF 간 flow 배정(스케줄링)이지 단일 UPF 데이터패스 아님.}
+}
+
+@misc{multus_dynamic_networks,
+  title        = {Multus Dynamic Networks Controller},
+  author       = {{k8snetworkplumbingwg}},
+  howpublished = {GitHub repository},
+  url          = {https://github.com/k8snetworkplumbingwg/multus-dynamic-networks-controller},
+  note         = {런타임 pod 네트워크 인터페이스 add/remove 메커니즘. 전환 실행 계층
+                  선행 메커니즘. "어떻게"만 제공, "언제(정책)"는 공백 → 본 연구 기여와 구분.}
+}
+
+@misc{cnigenie,
+  title        = {{CNI}-Genie: Multiple {CNI} Plugin Coexistence at Runtime},
+  author       = {{CNI-Genie}},
+  howpublished = {GitHub repository},
+  url          = {https://github.com/cni-genie/CNI-Genie/},
+  note         = {런타임 다중 CNI 공존/선택 메커니즘. 전환 메커니즘 근거.
+                  전환 시점 판단(policy)은 다루지 않음.}
+}

@@ -92,11 +92,21 @@ T3(spike)에서 HOLD → False Positive 억제 성공
 | macvlan vs ipvlan 설명 (Bandewar 2015) | https://netdevconf.info/0.1/sessions/17.html |
 | 컨테이너 네트워킹 시각화 | https://iximiuz.com/en/posts/container-networking-is-simple/ |
 | IETF CNI Benchmarking draft | https://datatracker.ietf.org/doc/draft-samizadeh-bmwg-cni-benchmarking/ |
+| **Linux 커널 ipvlan 공식 문서** | https://docs.kernel.org/networking/ipvlan.html |
+| **Linux 커널 macvlan (iproute2/드라이버)** | https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking |
+| **CNI 스펙 (CNCF 공식)** | https://github.com/containernetworking/cni/blob/main/SPEC.md |
+| **Multus CNI (다중 NAD)** | https://github.com/k8snetworkplumbingwg/multus-cni |
+| **CNI 플러그인 성능 벤치마크 (블로그, 광범위 비교)** | https://itnext.io/benchmark-results-of-kubernetes-network-plugins-cni-over-40gbit-s-network-2024-156f085a5e4e |
+| [연구] A Comprehensive Benchmark of Flannel CNI in SDN/Non-SDN Cloud-Native, 2025 | https://doi.org/10.1109/tnsm.2025.3602607 |
+| [연구] UniNet: Accelerating the Container Network Data Plane in IaaS Clouds, 2024 | https://doi.org/10.1109/cloud62652.2024.00023 |
+| [연구] Kubernetes Load-balancing & network functions using P4, 2021 | https://doi.org/10.1145/3493425.3502768 |
+| → 더 많은 CNI/데이터플레인 자료 | `reference/READING_LIST.md` 섹션 D 참조 |
 
 ### 심사에서 나올 수 있는 질문
 - "왜 ipvlan이 소패킷에서 유리?" → 커널 내부 L3 처리, MAC lookup 불필요, per-packet CPU cost 낮음
 - "왜 macvlan이 대패킷에서 유리?" → NIC HW offload(TSO/GRO), multiqueue 활용
-- "dual-bridge 편향이 뭔가?" → ipvlan이 veth pair를 추가 경유하면 불공정 → 물리 NIC 직접 분기로 해결
+- "dual-bridge 편향이 뭔가?" → ipvlan이 veth pair를 추가 경유하면 불공정 → 호스트 NIC(enp1s0)에 직접 분기로 해결 (주: 본 testbed의 enp1s0은 virtio_net 가상 NIC이며, '물리'가 아니라 '중간 bridge/veth 미경유 직접 분기'를 뜻함)
+- "SR-IOV/DPDK는 왜 안 쓰나?" → 본 노드는 virtio NIC(SR-IOV VF 미지원) + 4 vCPU → 하드웨어 가속 경로 불가. 그래서 소프트웨어 CNI 내 선택이 유일 (환경 제약, PROPOSAL 참조)
 
 ---
 
@@ -305,3 +315,45 @@ RF의 한계:
 
 - "이 접근이 실제로 동작한다는 보장은?"
   → 그래서 실험으로 검증. D(RF) > A(고정)이면 동작하는 것. 이론적 보장이 아닌 실증적 검증.
+
+---
+
+## 9. 시뮬레이터 학습 & Sim-to-Real (★ RL 전환 핵심)
+
+> ⚠️ 연구 방향 변경 메모: 모델이 **RF(지도학습) → RL(강화학습)**로 전환되었다.
+> 위 섹션 1~8은 아직 RF 기준 서술이 남아 있어 추후 RL(MDP/DQN) 기준으로 갱신 필요.
+> 본 섹션 9는 RL 전환에 따라 새로 공부해야 할 핵심 주제다.
+
+### 이해해야 할 것
+- **왜 시뮬레이터인가**: 실환경 1 에피소드 = Pod 재생성 + 120초 트래픽 ≈ 2분+.
+  RL은 수천 에피소드 필요 → 실환경 학습은 수십 시간~수주로 비현실적(단일 노드).
+  → 측정 데이터로 만든 **경량 시뮬에서 학습**, 실환경에서는 **평가만**.
+- **시뮬 구성**: state=(현재 CNI, pps, 패킷크기, loss 등), action={HOLD, SWITCH},
+  reward=구간 total bytes. baseline/switch 측정값을 룩업/수식으로 매핑.
+- **Sim-to-Real Gap**: 시뮬(근사)과 실제의 차이. "운전 게임 ≠ 실제 도로"와 같음.
+  반드시 **측정·보고**해야 순환논리(circular) 공격을 방어한다.
+  - (a) 시뮬 예측 KPI vs 실측 KPI 오차
+  - (b) 시뮬 RL 성능 vs 실환경 RL 성능
+  - → RL은 시뮬에서만 배웠는데 **처음 보는 실환경에서도 통함** = 일반화 증명(동어반복 아님)
+  - gap이 있어도 **전략 순위(A<B<C<D)가 유지되면** 결론 유효.
+
+### 학습 자료
+| 자료 | 링크 |
+|------|------|
+| **[직접 선례] 대기행렬 시뮬로 RL 파드 오토스케일링 학습 (고려대 2022)** | https://dcollection.korea.ac.kr/srch/srchDetail/000000265207 |
+| Digital Twin-Enhanced DRL for Resource Management, 2024 | https://doi.org/10.1109/tcomm.2024.3395698 |
+| Sim-to-Real Optimization of Real World Mobile Network, 2018 | https://doi.org/10.48550/arxiv.1802.06416 |
+| Real–Sim–Real Transfer (gap 검증 방법론), 2020 | https://doi.org/10.3390/app10051555 |
+| **Gymnasium 커스텀 환경 작성 가이드** (시뮬을 Gym으로) | https://gymnasium.farama.org/introduction/create_custom_env/ |
+| **Stable-Baselines3** (DQN 등 검증된 RL 구현체) | https://stable-baselines3.readthedocs.io/ |
+| Sutton & Barto, *Reinforcement Learning: An Introduction* (RL 교과서) | http://incompleteideas.net/book/the-book-2nd.html |
+| Spinning Up in Deep RL (OpenAI, 입문) | https://spinningup.openai.com/ |
+| → 더 많은 시뮬/sim-to-real 자료 | `reference/READING_LIST.md` 섹션 C-3 |
+
+### 심사에서 나올 수 있는 질문
+- "시뮬에서 잘한 게 실제에서도 되나?" → sim-to-real gap 측정으로 증명 (메트릭 a/b).
+- "시뮬이 정답을 품고 있으니 RL이 이기는 게 당연한 순환논리 아닌가?"
+  → 학습(시뮬)과 검증(실환경)을 분리. 처음 보는 실환경에서도 통함을 보여 일반화 증명.
+- "왜 RL인가, Rule이나 수식으로 충분하지 않나?"
+  → 미래 불확실성(T3 spike/T5 oscillation)에서 단순 규칙은 속음(FP). 지속성 추정이 필요.
+- "단일 노드/GPU 없음인데 RL 학습이 되나?" → 시뮬 학습은 CPU만으로 충분. 실환경은 평가만.

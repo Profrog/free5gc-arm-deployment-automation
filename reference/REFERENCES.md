@@ -1106,3 +1106,283 @@ dual-bridge가 없으면 Pod 안에 macvlan(n3)과 ipvlan(n3i)이 동시에 존�
 { "master": "enp0s6" }
 // enp0s6 = OCI A1.Flex의 물리 NIC (en + p0 + s6)
 ```
+
+
+---
+
+# [C] 외부 선행연구 — Gap 검증 및 방법론 선례 (2026-10 웹 수집)
+
+> 본 그룹은 "왜 CNI 런타임 전환 연구가 공백인가"를 입증하는 두 축을 정리한다.
+> (1) CNI **정적 비교**는 포화됐고(=전제는 공인됨), (2) RL **비용-이득 전환**
+> 방법론은 마이그레이션/스케일링 도메인에서 성숙했으나, (3) **그 둘의 교집합
+> (RL로 소프트웨어 CNI 백엔드를 런타임 전환)은 비어 있다.**
+
+## [C1] Performance and Latency Efficiency Evaluation of Kubernetes CNIs (전제 공인 근거)
+
+- **저자**: Vedran Dakic, Jasmin Redzepagic, Matej Basic, Luka Zgrablic (Algebra University, Zagreb)
+- **출처**: Electronics 2024, 13(19), 3972 (MDPI)
+- **URL**: https://www.mdpi.com/2079-9292/13/19/3972
+
+### 주요 결과
+- 여러 CNI(Flannel/Cilium/Calico/Antrea 등)를 빌트인·커스텀 튜닝 프로파일로 벤치마크.
+- **핵심 결론(원문)**: *"certain CNIs are better suited for specific use cases,
+  mainly when tuning for smaller or larger network packets and workload types."*
+  → **특정 CNI가 소패킷/대패킷·워크로드 종류에 따라 더 유리**함을 독립적으로 보고.
+
+### 본 연구와의 관계 (★ 전제 외부 근거)
+- 본 연구 Preliminary Result(소패킷→ipvlan, 대패킷→macvlan)와 **동일한 방향의
+  결론을 독립 실증**. → "트래픽 특성에 따라 최적 CNI가 다르다"는 전제를 본 연구가
+  증명할 필요 없이 **외부 인용으로 공인**시킬 수 있음.
+- **차별점**: 이 논문은 **정적 비교(어느 CNI가 좋은가)**에서 멈춤. **런타임 전환
+  (그래서 바꾼다)**은 다루지 않음 → 본 연구의 gap이 시작되는 지점.
+
+## [C2] A Comprehensive Performance Evaluation of CNI Plugins for Edge (ARM+AMD)
+
+- **저자**: Zhuangwei Kang, Kyoungho An, Aniruddha Gokhale, Paul Pazandak (Vanderbilt / RTI)
+- **출처**: IEEE IC2E 2021
+- **URL**: https://www.dre.vanderbilt.edu/~gokhale/WWW/papers/IC2E21_CNI_Eval.pdf
+
+### 주요 결과
+- Flannel/WeaveNet/Kube-Router를 **하이브리드(ARM+AMD) 엣지/클라우드 K8s**에서
+  pub/sub(DDS) 워크로드로 CNI 네트워크 가상화 오버헤드 평가.
+
+### 본 연구와의 관계
+- **ARM 엣지 CNI 성능 차이**의 선례 → 본 testbed(ARM64 엣지) 설정 정당화.
+- 역시 **정적 평가**에 그침. 트래픽 변화에 따른 **동적 전환**은 범위 밖.
+
+## [C3] FIRE: A Failure-Adaptive RL Framework for Edge Computing Migrations (방법론 선례 ★)
+
+- **저자**: Marie Siew, Shikhar Sharma, Zekai Li, Kun Guo, Chao Xu,
+  Tania Lorido-Botran, Tony Q. S. Quek, Carlee Joe-Wong
+- **출처**: arXiv:2209.14399 (v4, 2025); accepted IEEE Transactions on Services Computing
+- **URL**: https://arxiv.org/abs/2209.14399
+
+### 주요 결과
+- 엣지 서비스 마이그레이션을 **디지털 트윈(=시뮬) 환경에서 RL로 학습**.
+- 목적함수에 **delay + migration cost + failure + backup placement cost**를 통합.
+- **greedy baseline 및 vanilla RL과 비교**하여 비용 절감 입증. (trace-driven)
+
+### 본 연구와의 관계 (★ 방법론 직접 선례)
+- "비용을 수반하는 전환(마이그레이션)의 **시점을 RL로**, **시뮬에서 학습**,
+  **baseline 대비 비교**"라는 본 연구의 전체 골격과 **구조적으로 동일**.
+  → 리뷰어의 "RL로 전환 시점 판단이 정당한가 / 시뮬 학습이 타당한가" 공격 방어.
+- **차별점(=본 연구 기여)**: FIRE의 제어 대상은 **서비스 프로파일 마이그레이션**.
+  본 연구는 제어 대상을 **데이터플레인 CNI 백엔드 전환**으로 이동 → "같은 방법론,
+  비어 있던 새 대상".
+
+## [C4] Low-Latency Layer-Aware Container Migration in Meta Computing (비용-이득 RL 선례)
+
+- **저자**: Mengjie Liu, Yihua Li, Fangyi Mou, Zhiqing Tang, Jiong Lou,
+  Jianxiong Guo, Weijia Jia (BNU 등)
+- **출처**: arXiv:2406.13404, 2024
+- **URL**: https://arxiv.org/abs/2406.13404
+
+### 주요 결과
+- 컨테이너 마이그레이션의 **migration cost vs latency 트레이드오프**를 layer 의존성을
+  고려한 **policy-gradient RL**로 최소화 (proactive/passive 모두).
+
+### 본 연구와의 관계
+- "전환 비용을 치를 가치가 있는가"의 **break-even 의사결정을 RL로** 정식화한 선례.
+  → 본 연구 비용-이득 프레이밍(ΔThroughput × T_remaining > C_switch)과 동형.
+- **차별점**: 대상이 컨테이너 **배치/이동**. 본 연구는 **네트워크 데이터패스** 전환.
+
+---
+
+## [C-요약] Gap Positioning (3-way 지형)
+
+| 축 | 선행연구 | 상태 | 본 연구 위치 |
+|----|----------|------|-------------|
+| CNI 정적 비교 | C1(MDPI'24), C2(IC2E'21), A9/A10 | **포화** | 전제로 흡수(증명 불필요) |
+| RL 비용-이득 전환(마이그레이션/스케일링) | C3(FIRE), C4, READING_LIST C-1 | **성숙** | 방법론 차용 |
+| **RL × CNI 데이터패스 런타임 전환** | — | **공백** | **본 연구 기여** |
+
+→ 성숙한 방법론(RL 비용-이득 전환)을 공인된 전제(CNI는 트래픽별 최적이 다름) 위에서
+   **비어 있던 대상(소프트웨어 CNI 런타임 전환)**에 적용 = 저위험·참신 위치.
+
+
+---
+
+# [C5] 대표 적용 도메인 — 스마트팩토리 온프레미스 Private 5G의 머신비전 영상 업링크
+
+> 본 연구의 scope(자원제약 가상화 엣지 + elephant flow)를 **단일·구체 도메인**으로
+> 고정하여 문제 정의의 external validity를 확보한다. 즉 "왜 하드웨어 가속/증설이
+> 아니라 CNI 전환인가"의 답을 testbed 실측(internal)에 더해, **현실에 널리 존재하는
+> 산업 도메인**(external)으로 뒷받침한다.
+
+### 도메인이 본 연구 scope를 충족하는 근거 (5-조건 매핑)
+
+| 본 연구 scope 조건 | 스마트팩토리 머신비전에서의 충족 | 근거 |
+|--------------------|-------------------------------|------|
+| ① 자원제약(SR-IOV/DPDK 비현실적) | 온프레미스 private 5G core가 소수 COTS 서버/스마트랙에서 운영, CapEx/OpEx 효율이 핵심 | [C5-3], [C5-4] |
+| ② 단일 노드·스케일아웃 제한 | 서버룸/스마트랙 내 2~3대(혹은 단일) 물리 서버 | [C5-3] |
+| ③ 5G UPF 실 시나리오 | 영상이 UPF→로컬 MEC/엣지로 흐름, 데이터패스 성능 직결 | [C5-1], [C5-2] |
+| ④ elephant flow 존재 | 머신비전 카메라의 **지속적 대용량 업링크**(uplink-heavy, 4K/8K) | [C5-1], [C5-5] |
+| ⑤ URLLC/mice 지배 아님(교차) | 제어(URLLC 소패킷)와 영상(eMBB 대패킷)이 **동시·교차** | [C5-2] |
+
+→ 특히 ⑤가 결정적: 트래픽이 소패킷(제어)↔대패킷(영상)을 오가므로 **고정 CNI는 한쪽에
+   항상 불리**하고, 본 연구의 트래픽 시나리오(T1~T5: ramp/spike/oscillation)가 공정
+   상황 변화로 **자연 발생**한다. → 전환 이득의 현실 근거.
+
+## [C5-1] 5G-ACIA White Paper — Machine Vision in Industrial Applications with 5G
+
+- **출처**: 5G Alliance for Connected Industries and Automation (5G-ACIA), White Paper, 2022
+- **URL**: https://5g-acia.org/ (download/24343)
+- **핵심(원문)**: *"Typical machine vision applications can be quite demanding both in
+  terms of high availability and bandwidth."*
+- **본 연구 근거**: 산업 5G 표준 단체의 공식 문서 → 머신비전이 **고대역폭 지속
+  트래픽(elephant flow)**임을 권위 있게 입증. 도메인 정당화의 1순위 인용.
+
+## [C5-2] QoS-Aware PF Scheduling for Multi-Flow 5G UEs: A Smart Factory Perspective
+
+- **저자**: Mohamed Seliem, Utz Roedig, Cormac Sreenan, Dirk Pesch
+- **출처**: IEEE MSWiM 2025; arXiv:2508.21783
+- **URL**: https://arxiv.org/abs/2508.21783
+- **핵심(원문)**: *"a single device often handles multiple concurrent traffic flows
+  with distinct QoS... a realistic smart factory scenario featuring **edge-hosted
+  machine vision, real-time control loops, and bulk data transfer**."*
+- **본 연구 근거(★)**:
+  - 공장 단말이 **제어(URLLC)+머신비전+벌크를 동시 처리** → 본 연구의 "트래픽 특성
+    교차" 전제를 직접 뒷받침 (scope 조건 ⑤).
+  - Simu5G 기반 시뮬로 분석 → 본 연구의 **시뮬레이터 학습 전략**과 방법론적 정합.
+  - 차별점: 이 논문은 **무선 스케줄러(RAN QoS)** 최적화. 본 연구는 **코어 UPF의
+    데이터패스(CNI)** 전환 → 제어 계층이 다름(상호 보완).
+
+## [C5-3] Edge Computing for Private 5GaaS (자원제약·단일노드 근거)
+
+- **출처**: EnterpriseViewpoint, 2022
+- **URL**: https://enterpriseviewpoint.com/edge-computing-for-private-5gaas/
+- **핵심(원문)**: *"dedicated 5G core can run on a dedicated Edge computing with **2-3
+  physical servers** deployed in a server room or inside a **smart rack** in an
+  industrial setup."*
+- **본 연구 근거**: 공장 private 5G core가 소규모 물리 서버에서 운영됨 → 데이터센터급이
+  아닌 **자원제약·스케일아웃 제한** 환경임을 입증 (scope 조건 ①②).
+
+## [C5-4] Streamlined Deployment of Private 5G Networks with Edge Services (CapEx/OpEx 근거)
+
+- **출처**: ASTRI (Hong Kong Applied Science and Technology Research Institute)
+- **URL**: https://www.astri.org/ (streamlined-deployment-of-private-5g-networks-with-edge-services)
+- **핵심(원문)**: *"Deploying the 5G network and edge applications on a common hardware
+  ... using a **single physical host** provides CapEx efficiency ... as well as OpEx
+  efficiency."*
+- **본 연구 근거**: 온프레미스 private 5G가 **비용 효율을 위해 단일/공용 호스트**에
+  통합 배치됨 → "하드웨어 가속/증설을 안 쓰는 것이 아니라, 비용·운영상 쓰기 어렵다"는
+  2번 공격(contrived scope) 방어의 핵심 근거.
+
+## [C5-5] Nokia Private Networks — Video Surveillance & Analytics (업링크 대역폭 근거)
+
+- **출처**: Nokia, Private Networks Solution Page
+- **URL**: https://www.nokia.com/private-networks/video-surveillance/
+- **핵심(원문)**: *"Only 5G can support the increasing density of cameras, with the
+  **uplink bandwidth** and quality of service that **4K and 8K video** require."*
+- **본 연구 근거**: 산업 영상의 업링크 대역폭 요구 → elephant flow의 규모·지속성 근거
+  (scope 조건 ④). macvlan 유리 구간이 실제로 발생하는 트래픽의 산업적 실체.
+
+---
+
+## [C5-요약] 문제 정의 단일 서사
+
+> "스마트팩토리의 온프레미스 private 5G는 비용 효율을 위해 소수의 범용 COTS
+> 서버(SR-IOV/DPDK 비현실적)에서 5G 코어를 운영한다[C5-3,C5-4]. 이 환경의 UPF는 제어
+> 트래픽(소패킷·URLLC)과 머신비전 영상 업링크(대패킷·지속적 elephant
+> flow)[C5-1,C5-5]를 **동시에 처리하며, 트래픽 성격이 공정 상황에 따라
+> 교차**한다[C5-2]. 고정 CNI는 한쪽 트래픽에 항상 불리하고, 하드웨어 가속·증설은
+> 비용·운영상 불가능하다. 따라서 트래픽 특성에 맞춘 **경량 CNI 런타임 전환**이 이
+> 환경에서 현실적인 적응 수단이다."
+
+
+---
+
+# [C6] 가장 가까운 선행연구 — Novelty 방어 (직접 경쟁/인접)
+
+> ★ 본 그룹은 "민규 연구와 거의 같은 것이 이미 있는가"에 대한 정면 방어다. 결론:
+> **"거의 일치"하는 논문은 없으나, "가장 가까운 경쟁 논문"([C6-1])은 존재**한다.
+> 반드시 인용·차별화해야 리뷰어의 "이미 UPF 동적 전환 있다" 공격을 막는다.
+
+## [C6-1] ★ Dynamic AI-Based UPF Switching (가장 가까운 경쟁 논문 — 필수 인용)
+
+- **저자**: Sokratis Christakis, Nikos Makris, Serge Fdida, Thanasis Korakis
+  (Univ. of Thessaly / CERTH / Sorbonne)
+- **출처**: IEEE Globecom 2025
+- **URL**: https://sunrise6g.eu/wp-content/uploads/2026/01/UPF_Switching_Final-Globecom-2025.pdf
+
+### 핵심
+- UPF의 **두 소프트웨어 구현(SPGW-U ↔ VPP)**을 트래픽에 따라 **동적 전환**.
+- **LSTM으로 throughput을 예측** → 예측 기반 proactive switching.
+- 트레이드오프를 **throughput vs energy consumption**으로 정식화.
+
+### 본 연구와의 차별점 (★ Novelty 선 긋기)
+
+| 축 | Globecom'25 [C6-1] | 본 연구 (민규) |
+|----|--------------------|---------------|
+| 전환 대상 | UPF **앱 구현**(SPGW-U/VPP) — L7 | **CNI 데이터패스**(ipvlan/macvlan) — L2/L3 커널 |
+| 방법 | **LSTM 예측 + 규칙** (지도학습 예측기) | **RL 정책 학습** (순차적 의사결정) |
+| 비용 모델 | energy consumption | **전환 downtime(손실 bytes)을 reward에 내재화** |
+| 불확실성 처리 | 예측값 기반 즉시 전환 | 미래 지속성 불확실성 하 HOLD/SWITCH 학습 |
+| 환경 scope | 한정 없음 | 자원제약 far-edge(SR-IOV 불가) + 시뮬 학습 |
+
+→ **포지셔닝**: [C6-1]의 "LSTM 예측 기반 전환"은 본 연구 Rule-based 비교군(C)의
+   **정교한 변형**으로 간주 가능. "예측 기반 규칙도 미래 지속성 불확실성(T3 spike,
+   T5 oscillation)에서 false positive를 낸다 → RL(D)이 필요"는 논리로, [C6-1]을
+   **비교·동기 근거로 역이용**한다. 제어 계층(L7 앱 vs L2/L3 CNI)과 비용 모델
+   (energy vs downtime)이 본질적으로 달라 중복이 아니다.
+
+## [C6-2] An Intelligent eUPF for Time-Sensitive Path Selection in B5G Edge (인접 — RL 방법 유사)
+
+- **저자**: Rodrigo Moreira, Larissa F. R. Moreira, Tereza C. Carvalho, Flávio de O. Silva
+- **출처**: ICCSA 2026; arXiv:2605.01475
+- **URL**: https://arxiv.org/abs/2605.01475
+
+### 핵심
+- eUPF에서 **DQN 에이전트**로 MEC↔cloud **경로(path) 실시간 선택**, POMDP로 정식화.
+- eBPF로 GTP-U TEID 타임스탬프를 연결하는 **passive delay 측정** 제안.
+- random baseline 대비 DQN 우위 입증.
+
+### 본 연구와의 관계
+- **방법론 매우 유사**(DQN + POMDP + UPF) → 본 연구 RL 정식화의 **정합성 근거**로 인용.
+- **차별점**: 전환 대상이 **엔드포인트 경로(path)** 선택. 본 연구는 **동일 경로 내
+  데이터패스 드라이버(CNI)** 전환 → 제어 대상이 다름. 또한 본 연구는 전환 **비용
+  (downtime)**을 핵심에 두나, [C6-2]는 경로 선택 비용을 다루지 않음.
+- (참고) passive delay 측정(eBPF)은 본 연구 KPI 수집의 대안 기법으로 Discussion 인용 가능.
+
+## [C6-3] Post-Decision State-Based Online Learning for Flow Allocation in UPFs (인접 — RL×UPF)
+
+- **저자**: Mahesh Ganesh Bhat, Shana Moothedath, Prasanna Chaporkar
+- **출처**: submitted to IEEE ICC 2026; arXiv:2601.03108
+- **URL**: https://arxiv.org/abs/2601.03108
+
+### 핵심
+- 다수 UPF에 걸친 **flow allocation**을 MDP로 모델링, **post-decision state 기반
+  value iteration**으로 delay-energy 비용 최소화. 시뮬 기반, Q-learning 대비 우위.
+
+### 본 연구와의 관계
+- RL×UPF×비용 최소화 + **시뮬 학습**이라는 골격이 겹침 → 방법론 정합 근거.
+- **차별점**: 대상이 **여러 UPF 간 flow 배정**(스케줄링). 본 연구는 **단일 UPF 내부
+  데이터패스 전환**. 계층·행동 공간이 다름.
+
+## [C6-4] 전환 실행 메커니즘 도구 (CNI 런타임 변경 — "언제"가 아닌 "어떻게")
+
+- **Multus dynamic-networks-controller**: https://github.com/k8snetworkplumbingwg/multus-dynamic-networks-controller
+  - pod annotation 변경 시 네트워크 인터페이스를 런타임에 add/remove.
+- **CNI-Genie**: https://github.com/cni-genie/CNI-Genie
+  - 런타임에 **다중 CNI 공존·선택** 지원.
+
+### 본 연구와의 관계
+- 이들은 CNI를 런타임에 바꾸는 **메커니즘(도구)**만 제공, **"언제 바꿀지(판단)"는
+  다루지 않음**. → 본 연구 전환 실행 계층의 선행 메커니즘 근거로 인용하되, 본 연구의
+  기여(전환 시점의 RL 판단)와 명확히 구분. "메커니즘은 있으나 정책(policy)은 공백".
+
+---
+
+## [C6-요약] Novelty 좌표
+
+| 선행연구 | 전환 대상 | 방법 | 비용 | 본 연구와 거리 |
+|----------|-----------|------|------|---------------|
+| [C6-1] Globecom'25 | UPF 앱(SPGW-U/VPP) | LSTM 예측 | energy | **가장 가까움**(경쟁) |
+| [C6-2] eUPF path | MEC/cloud 경로 | DQN/POMDP | delay | 가까움(방법 유사) |
+| [C6-3] flow alloc | UPF 간 flow 배정 | PDS-RL | delay-energy | 인접 |
+| [C6-4] Multus/Genie | CNI 인터페이스 | 메커니즘 | — | 메커니즘만(정책 공백) |
+| **본 연구** | **CNI 데이터패스(ipvlan/macvlan)** | **RL(DQN)** | **전환 downtime** | — |
+
+→ 어느 것도 "CNI 데이터패스를 + downtime 비용 내재화 RL로 + 자원제약 엣지에서 전환"을
+   동시에 다루지 않는다. **교집합이 비어 있음 = novelty 성립.** 단 [C6-1]은 반드시
+   인용·차별화(L7 앱 vs L2/L3 CNI, LSTM 예측 vs RL 의사결정, energy vs downtime).

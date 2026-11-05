@@ -56,6 +56,11 @@
   https://dcollection.korea.ac.kr/srch/srchDetail/000000257731
 - RL-driven Kubernetes autoscaling for high-throughput 5G, 2025. RL×K8s×5G 삼박자.
   https://doi.org/10.30574/wjaets.2025.15.2.0663
+- **[국내·동일학교 계열] 이현식, "ML 서비스의 데이터 처리량 기반 쿠버네티스
+  오토스케일링 기법", 고려대, 2024 (지도 유헌창).** 처리량(throughput) KPI를 관측해
+  K8s 자원을 동적 조정 — **본 연구 2차(KPI 관측→판단→집행 폐루프)의 국내 선례.**
+  장용현(cost-efficient RL HPA)과 동일 지도교수 계열로 일관성 확보. (dCollection, 2026-11 추가)
+  https://dcollection.korea.ac.kr/srch/srchDetail/000000288312
 - DRS: a deep RL enhanced Kubernetes scheduler for microservices, 2023 (cite 42).
   https://doi.org/10.1002/spe.3284
 - Efficient Microservice Deployment in Kubernetes via RL, 2024 (cite 29).
@@ -114,6 +119,31 @@
 - Kubernetes Load-balancing and related network functions using P4, 2021 (cite 9).
   https://doi.org/10.1145/3493425.3502768
 
+### D-1. ★ 최신 선행 — 제약 엣지 CNI & K8s-hosted UPF 데이터패스 (arXiv, 2026-11 추가)
+
+본 연구와 프레이밍이 가장 가까운 최신 arXiv 자료. KU 검색 = 고려대 도서관
+Discovery(Primo)에서 제목으로 원문/소장 확인용.
+
+- **★ Performance Evaluation of Kubernetes Networking Approaches across Constraint
+  Edge Environments (2024).** **"제약 엣지에서 K8s CNI 성능 평가"** — 본 연구 1차와
+  거의 동일한 프레이밍. **직접 비교·차별화 필수 선행.** (본 연구 차별점: {CPU,drop}
+  공동 목적함수 + 학습 기반 선택/전환)
+  arXiv:2401.07674 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=Kubernetes%20Networking%20Constraint%20Edge
+- **★ Line-Rate GTP-U Admission Control at the Edge of a Cloud-Native 5G Core:
+  An XDP-Based Design for Kubernetes-Hosted UPF (2026).** K8s 호스팅 UPF의 N3
+  데이터패스를 XDP로 처리 — 2차(standalone UPF 데이터패스)의 최신 배경.
+  arXiv:2610.02296 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=Line-Rate%20GTP-U%20Admission%20Control%20Kubernetes%20UPF
+- **Comparing UPF Dataplane I/O Modes in a Cloud-Native 5G Core: AF_PACKET, AF_XDP,
+  CNDP, DPDK (2026).** 소프트웨어 포워딩 경로별 성능 — §2.1 배경(가속 데이터패스
+  배제 논거) 보강. (first_glance 2-3과 동일)
+  arXiv:2608.14589 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=Comparing%20UPF%20Dataplane%20IO%20Modes%20Cloud-Native%205G
+- **Kernel-Level Per-Slice UPF Latency Measurement in Containerised 5G Core (2026).**
+  UPF 커널 레벨 forwarding/GTP-U 처리 측정 — CPU(softirq) 수집 설계의 방법론 참고.
+  arXiv:2605.28185 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=Kernel-Level%20Per-Slice%20UPF%20Latency%20Containerised%205G
+- Enabling Time-Sensitive Applications in Kubernetes with CNI Plugin Agnostic
+  Metadata Proxy (2025). CNI 비의존 메타데이터 — 런타임 CNI 제어 관련 참고.
+  arXiv:2503.12878 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=Time-Sensitive%20Kubernetes%20CNI%20Plugin%20Agnostic%20Metadata%20Proxy
+
 ## E. 트래픽 특성 / scope 근거 (elephant vs mice flow)
 
 본 연구 scope("순간 단절 민감 트래픽이 아니라 장기·대량 트래픽에 효과적")의 근거.
@@ -122,6 +152,29 @@
   https://doi.org/10.1109/access.2020.2987977
 - Adaptive approach for elephant flow detection, 2017 (cite 14).
   https://doi.org/10.1002/nem.1987
+
+### E-1. 산업/스마트팩토리 5G 트래픽 (대표 도메인 앵커, arXiv, 2026-11 추가)
+
+PROPOSAL의 대표 현실 사례(공장 private 5G에서 제어+영상 트래픽 교차)를 뒷받침.
+dCollection에는 해당 기술자료가 없어(경영/정책 논문만 존재) arXiv로 보강. KU 검색
+링크는 고려대 도서관 Discovery.
+
+- **Empirical Analysis of 5G TDD Patterns for Industrial Automation Traffic (2025).**
+  산업 자동화의 **다양한 트래픽 유형(결정적 저지연 + 대역폭)** 공존을 실증 — 공장
+  트래픽 교차의 근거.
+  arXiv:2504.00912 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=5G%20TDD%20Patterns%20Industrial%20Automation%20Traffic
+- **Unleashing 5G Seamless Integration with TSN for Industry 5.0 (2025).** 산업
+  환경의 5G 저지연 서비스·QoS 처리 — 제어 트래픽(URLLC) 측 scope 근거.
+  arXiv:2505.20239 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=5G%20TSN%20Industry%205.0%20QoS
+- **A New Scheduler for URLLC in 5G NR IIoT Networks with Spatio-Temporal Traffic
+  Correlations (2023).** 산업 IoT의 URLLC 트래픽 특성 — "순간 단절 민감 트래픽은
+  scope 제외" 논거 보강.
+  arXiv:2302.12681 · KU 검색: https://library.korea.ac.kr/search/i-discovery/?q=URLLC%205G%20NR%20IIoT%20Scheduler%20Spatio-Temporal
+
+> 주의: 위 arXiv 자료는 "산업 5G 트래픽 특성"의 **학술적 보강**이며, 머신비전
+> elephant flow·공장 통합배치의 **1차 산업 근거(5G-ACIA 백서, Seliem MSWiM 2025,
+> Nokia)**는 산업 컨소시엄/컨퍼런스 자료로 dCollection·arXiv 밖에 있다. 해당 원출처는
+> REFERENCES.md [C5] 참조(별도 확보 필요).
 
 ## F. 비용-이득 / 마이그레이션 비용 (break-even 수식 근거)
 

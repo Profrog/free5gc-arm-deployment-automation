@@ -1310,21 +1310,43 @@ dual-bridge가 없으면 Pod 안에 macvlan(n3)과 ipvlan(n3i)이 동시에 존�
 - **LSTM으로 throughput을 예측** → 예측 기반 proactive switching.
 - 트레이드오프를 **throughput vs energy consumption**으로 정식화.
 
-### 본 연구와의 차별점 (★ Novelty 선 긋기)
+### ★ 원문 확인 (2026-11-05, 전문 정독)
+- **학습 방법 = 지도학습(supervised).** LSTM(2 layers)으로 **uplink throughput을
+  3-step ahead 예측**(시계열 회귀), MSE 손실로 학습. 강화학습(RL/reward/policy) 요소
+  **없음**.
+- **전환 결정 구조**: "switching agent, **based on these predictions, evaluates**
+  whether to switch" — 즉 **LSTM 예측값을 받아 규칙적으로 전환을 판정**하는 reactive
+  구조. 전환 정책 자체를 학습하지 않음.
+- 함의: Globecom은 "예측기(supervised) + 예측기반 전환규칙"이다. **전환 '정책'을
+  학습한 것이 아니다.**
+
+### 본 연구와의 차별점 (★ Novelty 선 긋기 — 2026-11-05 갱신, 새 방향 반영)
 
 | 축 | Globecom'25 [C6-1] | 본 연구 (민규) |
 |----|--------------------|---------------|
 | 전환 대상 | UPF **앱 구현**(SPGW-U/VPP) — L7 | **CNI 데이터패스**(ipvlan/macvlan) — L2/L3 커널 |
-| 방법 | **LSTM 예측 + 규칙** (지도학습 예측기) | **RL 정책 학습** (순차적 의사결정) |
-| 비용 모델 | energy consumption | **전환 downtime(손실 bytes)을 reward에 내재화** |
-| 불확실성 처리 | 예측값 기반 즉시 전환 | 미래 지속성 불확실성 하 HOLD/SWITCH 학습 |
-| 환경 scope | 한정 없음 | 자원제약 far-edge(SR-IOV 불가) + 시뮬 학습 |
+| 목적함수 | throughput vs **energy** (단일 예측치 기반) | **{CPU, drop} 정규화 가중합(50:50)** — 다목적 |
+| 기여 성격 | LSTM으로 전환을 **구현**(예측→규칙) | **CPU-drop trade-off 구간을 실증** + 그 구간에서 학습 선택의 우위 규명 |
+| 학습 방법 | **지도학습 예측기(LSTM)** — 확인됨 | **AI 학습(지도/강화 미정)**. ↓ 아래 전략 메모 |
+| 환경 scope | 한정 없음 | 자원제약 far-edge(SR-IOV·DPDK 불가, 4 vCPU 병목 — 실측) |
 
-→ **포지셔닝**: [C6-1]의 "LSTM 예측 기반 전환"은 본 연구 Rule-based 비교군(C)의
-   **정교한 변형**으로 간주 가능. "예측 기반 규칙도 미래 지속성 불확실성(T3 spike,
-   T5 oscillation)에서 false positive를 낸다 → RL(D)이 필요"는 논리로, [C6-1]을
-   **비교·동기 근거로 역이용**한다. 제어 계층(L7 앱 vs L2/L3 CNI)과 비용 모델
-   (energy vs downtime)이 본질적으로 달라 중복이 아니다.
+### ★ 차별성 전략 메모 (방법 선택이 차별성에 미치는 영향)
+Globecom이 **지도학습**임이 확인되었으므로, 본 연구 1차의 학습 방법 선택이 차별성
+강도를 좌우한다:
+- **본 연구가 강화학습으로 가면** → "Globecom=예측기(supervised) / 본 연구=전환 정책
+  학습(RL)"로 **방법론 차별점이 명확**. 특히 Globecom의 reactive 예측-전환 구조는
+  예측 오차·급변(spike/oscillation)에서 false switching 위험 → 전환비용을 내재화한
+  순차적 의사결정(RL)이 이길 여지. **차별화 방어가 가장 쉬움.**
+- **본 연구가 지도학습(분류)으로 가면** → Globecom과 **같은 지도학습 계열**이 되어
+  방법 차별점이 약해짐. 이 경우 차별성은 **(1) 전환 대상(CNI L2/L3) (2) 목적함수
+  (CPU-drop 다목적) (3) CPU-drop trade-off 실증**에 전적으로 의존 → 이 세 축을 강하게
+  밀어야 함.
+
+→ **공통 포지셔닝**: [C6-1]의 "예측 기반 전환"은 본 연구 Rule-based/예측기반 비교군의
+   **정교한 변형**으로 간주 가능. "단일 목적(throughput) 예측 기반 규칙은 CPU-drop
+   trade-off 구간에서 최적이 아니다 → 다목적 학습 선택이 필요"라는 논리로 [C6-1]을
+   **비교·동기 근거로 역이용**한다. 제어 계층(L7 앱 vs L2/L3 CNI)과 목적함수
+   (throughput-energy vs CPU-drop)가 본질적으로 달라 중복이 아니다.
 
 ## [C6-2] An Intelligent eUPF for Time-Sensitive Path Selection in B5G Edge (인접 — RL 방법 유사)
 

@@ -88,9 +88,17 @@ for i, doc in enumerate(docs):
         if m:
             cfg = json.loads(m.group(1))
             cfg['ipam']['subnet'] = f"{prefix}.0/{mask}"
-            cfg['ipam']['rangeStart'] = f"{prefix}.10"
             cfg['ipam']['rangeEnd'] = f"{prefix}.200"
-            cfg['ipam']['gateway'] = f"{prefix}.1"
+            # UPF는 N3/N4에서 고정 IP .1을 요구한다. 따라서 n3/n4는 rangeStart를
+            # .1로 두어 .1이 범위 안에 들어오게 하고, gateway는 .254로 두어 .1과
+            # 충돌하지 않게 한다. (과거 rangeStart=.10/gateway=.1 조합은 UPF의
+            # .1 할당을 거부해 sandbox 생성 실패를 유발했다 — 2026-11-15 디버깅)
+            if name in ('n3network', 'n4network'):
+                cfg['ipam']['rangeStart'] = f"{prefix}.1"
+                cfg['ipam']['gateway'] = f"{prefix}.254"
+            else:
+                cfg['ipam']['rangeStart'] = f"{prefix}.10"
+                cfg['ipam']['gateway'] = f"{prefix}.1"
             new_cfg = json.dumps(cfg, indent=4)
             doc = doc[:m.start(1)] + new_cfg + doc[m.end(1):]
             docs[i] = doc

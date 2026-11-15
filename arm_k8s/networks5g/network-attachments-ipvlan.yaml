@@ -32,9 +32,9 @@ spec:
     "ipam": {
       "type": "host-local",
       "subnet": "10.10.3.0/24",
-      "rangeStart": "10.10.3.10",
+      "rangeStart": "10.10.3.1",
       "rangeEnd": "10.10.3.200",
-      "gateway": "10.10.3.1"
+      "gateway": "10.10.3.254"
     }
   }'
 ---
@@ -52,8 +52,8 @@ spec:
     "ipam": {
       "type": "host-local",
       "subnet": "10.10.4.0/24",
-      "rangeStart": "10.10.4.10",
+      "rangeStart": "10.10.4.1",
       "rangeEnd": "10.10.4.200",
-      "gateway": "10.10.4.1"
+      "gateway": "10.10.4.254"
     }
   }'
